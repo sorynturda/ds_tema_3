@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "DEMO API DEVICES",
+    "_postman_id": "c8f1a9b2-7e1d-4a6c-8e14-device-demo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "resource", "value": "devices" },
+    { "key": "deviceId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "GET – List devices (200)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/{{resource}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}"] }
+      }
+    },
+    {
+      "name": "POST – Create device (201) [valid]",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"iPhone 17 Pro\",\n  \"manufacturer\": \"Apple\",\n  \"consumption\": 150\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/{{resource}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Created', ()=> pm.response.to.have.status(201));",
+              "// take the id from Location header OR from body (depends where you set it)",
+              "let id = null;",
+              "const loc = pm.response.headers.get('Location');",
+              "if (loc) { id = loc.split('/').slice(-1)[0]; }",
+              "else {",
+              "  try {",
+              "    const body = pm.response.json();",
+              "    if (typeof body === 'string') id = body;",
+              "    else if (body && body.id) id = body.id;",
+              "  } catch(e) {}",
+              "}",
+              "pm.expect(id, 'Extracted deviceId').to.be.ok;",
+              "pm.collectionVariables.set('deviceId', id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET – Get device by ID (200)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/{{resource}}/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "{{deviceId}}"] }
+      }
+    },
+    {
+      "name": "GET – Type mismatch UUID (400) [triggers MethodArgumentTypeMismatch]",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/{{resource}}/not-a-uuid", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "not-a-uuid"] }
+      }
+    },
+    {
+      "name": "POST – Consumption too low (400) [validation]",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Pixel 9\",\n  \"manufacturer\": \"Google\",\n  \"consumption\": 50\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/{{resource}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}"] }
+      }
+    },
+    {
+      "name": "POST – Missing name (400) [@NotNull on name]",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"manufacturer\": \"OnePlus\",\n  \"consumption\": 125\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/{{resource}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}"] }
+      }
+    },
+    {
+      "name": "POST – Malformed JSON (400) [triggers HttpMessageNotReadable]",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"name\": \"Xperia 1 VI\", \"manufacturer\": \"Sony\", \"consumption\": 123 " },
+        "url": { "raw": "{{baseUrl}}/{{resource}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}"] }
+      }
+    },
+    {
+      "name": "PUT – Replace device (204)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{deviceId}}\",\n  \"name\": \"iPhone 17 Pro Max\",\n  \"manufacturer\": \"Apple\",\n  \"consumption\": 160\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/{{resource}}/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "{{deviceId}}"] }
+      }
+    },
+    {
+      "name": "PATCH – Partial update (204)",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"manufacturer\": \"Apple Inc.\" }" },
+        "url": { "raw": "{{baseUrl}}/{{resource}}/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "{{deviceId}}"] }
+      }
+    },
+    {
+      "name": "DELETE – Remove device (204)",
+      "request": {
+        "method": "DELETE",
+        "url": { "raw": "{{baseUrl}}/{{resource}}/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "{{deviceId}}"] }
+      }
+    },
+    {
+      "name": "DELETE – Not found (404) [your service throws CustomException NOT_FOUND]",
+      "request": {
+        "method": "DELETE",
+        "url": { "raw": "{{baseUrl}}/{{resource}}/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "host": ["{{baseUrl}}"], "path": ["{{resource}}", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"] }
+      }
+    }
+  ]
+}
