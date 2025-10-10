@@ -7,6 +7,7 @@ import com.example.demo.dtos.builders.PersonBuilder;
 import com.example.demo.entities.Person;
 import com.example.demo.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.demo.repositories.PersonRepository;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,36 +44,40 @@ public class PersonService {
         return PersonBuilder.toPersonDetailsDTO(prosumerOptional.get());
     }
 
+    @Transactional
     public UUID insert(PersonDetailsDTO personDTO) {
         Person person = PersonBuilder.toEntity(personDTO);
         person = personRepository.save(person);
         LOGGER.debug("Person with id {} was inserted in db", person.getId());
         return person.getId();
     }
+    @Transactional
     public PersonDetailsDTO update(PersonDetailsDTO personDTO) {
-        Optional<Person> personOptional = personRepository.findById(personDTO.getId());
-        if (personOptional.isPresent()){
-            Person person = personOptional.get();
-            person.setAddress(personDTO.getAddress());
-            person.setName(personDTO.getName());
-            personRepository.save(person);
-            LOGGER.debug("Person with id {} was updated in db", personOptional.get());
-            return PersonBuilder.toPersonDetailsDTO(person);
-        }
-        else{
-            LOGGER.debug("Person with id {} was inserted in db", personDTO.getId());
-            return PersonBuilder.toPersonDetailsDTO(personRepository.save(PersonBuilder.toEntity(personDTO)));
-        }
+        Person person = personRepository.findById(personDTO.getId())
+            .map(existingPerson -> {
+                LOGGER.debug("Person with id {} will be updated in db", personDTO.getId());
+                existingPerson.setName(personDTO.getName());
+                existingPerson.setAddress(personDTO.getAddress());
+                return existingPerson;
+            })
+            .orElseGet(() -> {
+                LOGGER.debug("Person with id {} will be inserted in db", personDTO.getId());
+                return PersonBuilder.toEntity(personDTO);
+            });
+
+        Person savedPerson = personRepository.save(person);
+
+        return PersonBuilder.toPersonDetailsDTO(savedPerson);
     }
 
-    public boolean delete(UUID id){
-        Optional <Person> personOptional = personRepository.findById(id);
-        if(personOptional.isPresent()){
-            personRepository.delete(personOptional.get());
+    @Transactional
+    public boolean delete(UUID id) {
+        if (personRepository.existsById(id)) {
+            personRepository.deleteById(id);
             LOGGER.debug("Person with id {} was deleted from db", id);
             return true;
-        }else {
-            LOGGER.debug("Person with id {} was not deleted from db",id);
+        } else {
+            LOGGER.debug("Person with id {} was not found in db", id);
             return false;
         }
     }

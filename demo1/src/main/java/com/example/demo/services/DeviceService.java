@@ -7,6 +7,7 @@ import com.example.demo.dtos.builders.DeviceBuilder;
 import com.example.demo.entities.Device;
 import com.example.demo.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.demo.repositories.DeviceRepository;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ public class DeviceService {
         this.deviceRepository = deviceRepository;
     }
 
+    @Transactional
     public List<DeviceDTO> findDevices() {
         List<Device> deviceList = deviceRepository.findAll();
         return deviceList.stream()
@@ -49,31 +51,33 @@ public class DeviceService {
         LOGGER.debug("Device with id {} was inserted in db", device.getId());
         return device.getId();
     }
+
+    @Transactional
     public DeviceDetailsDTO update(DeviceDetailsDTO deviceDTO) {
-        Optional<Device> optionalDevice = deviceRepository.findById(deviceDTO.getId());
-        if (optionalDevice.isPresent()){
-            Device device = optionalDevice.get();
-            device.setManufacturer(deviceDTO.getManufacturer());
-            device.setName(deviceDTO.getName());
-            device.setConsumption(deviceDTO.getConsumption());
-            device = deviceRepository.save(device);
-            LOGGER.debug("Device with id {} was updated in db", device.getId());
-            return DeviceBuilder.toDeviceDetailsDTO(device);
-        }
-        else{
-            LOGGER.debug("Device with id {} was inserted in db", deviceDTO.getId());
-            return DeviceBuilder.toDeviceDetailsDTO(deviceRepository.save(DeviceBuilder.toEntity(deviceDTO)));
-        }
+        Device device = deviceRepository.findById(deviceDTO.getId())
+            .map(existingDevice -> {
+                LOGGER.debug("Device with id {} will be updated in db", deviceDTO.getId());
+                existingDevice.setName(deviceDTO.getName());
+                existingDevice.setManufacturer(deviceDTO.getManufacturer());
+                return existingDevice;
+            })
+            .orElseGet(() -> {
+               LOGGER.debug("Device with id {} will be inserted in db", deviceDTO.getId());
+               return DeviceBuilder.toEntity(deviceDTO);
+            });
+
+        Device savedDevice = deviceRepository.save(device);
+        return DeviceBuilder.toDeviceDetailsDTO(savedDevice);
     }
 
+    @Transactional
     public boolean delete(UUID id){
-        Optional <Device> deviceOptional = deviceRepository.findById(id);
-        if(deviceOptional.isPresent()){
-            deviceRepository.delete(deviceOptional.get());
+        if(deviceRepository.existsById(id)){
+            deviceRepository.deleteById(id);
             LOGGER.debug("Device with id {} was deleted from db", id);
             return true;
         }else {
-            LOGGER.debug("Device with id {} was not deleted from db",id);
+            LOGGER.debug("Device with id {} was not found in db",id);
             return false;
         }
     }
