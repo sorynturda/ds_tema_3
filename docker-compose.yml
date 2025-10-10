@@ -9,8 +9,8 @@ services:
     ports:
       - 443:443
 
-  user_serivce:
-    container_name: user_service
+  user-service1:
+    container_name: user-service1
     build:
       context: ./demo
       dockerfile: Dockerfile
@@ -22,8 +22,22 @@ services:
     depends_on:
       - user_db
 
-  device_service:
-    container_name: device_service
+  user-service2:
+    container_name: user-service2
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    volumes:
+      - ./demo:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 2001:8080
+    depends_on:
+      - user_db
+
+
+  device-service1:
+    container_name: device-service1
     build:
       context: ./demo1
       dockerfile: Dockerfile
@@ -31,7 +45,20 @@ services:
       - ./demo1:/app
       - maven_repo:/root/.m2
     ports:
-      - 2001:8080
+      - 3000:8080
+    depends_on:
+      - device_db
+
+  device-service2:
+    container_name: device-service2
+    build:
+      context: ./demo1
+      dockerfile: Dockerfile
+    volumes:
+      - ./demo1:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 3001:8080
     depends_on:
       - device_db
 
