@@ -1,3 +1,4 @@
+package com.example.auth.controller;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -25,7 +26,7 @@ public class TokenController {
 	@PostMapping("/token")
 	public String token(Authentication authentication) {
 		Instant now = Instant.now();
-		long expiry = 36000L;
+		long expiry = 10L;
 		// @formatter:off
 		String scope = authentication.getAuthorities().stream()
 				.map(GrantedAuthority::getAuthority)
