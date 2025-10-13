@@ -12,11 +12,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.example.auth.config;
+package com.example.auth.controller;
 
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @author Josh Cummings
  */
 @RestController
+@RequestMapping("/auth")
 public class HelloController {
 
 	@GetMapping("/")
