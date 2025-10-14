@@ -9,6 +9,17 @@ services:
     ports:
       - 443:443
 
+  auth-service:
+    container_name: auth-service
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    volumes:
+      - ./auth:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 4000:8080
+
   user-service1:
     container_name: user-service1
     build:
@@ -22,18 +33,18 @@ services:
     depends_on:
       - user_db
 
-  user-service2:
-    container_name: user-service2
-    build:
-      context: ./demo
-      dockerfile: Dockerfile
-    volumes:
-      - ./demo:/app
-      - maven_repo:/root/.m2
-    ports:
-      - 2001:8080
-    depends_on:
-      - user_db
+#  user-service2:
+#    container_name: user-service2
+#    build:
+#      context: ./demo
+#      dockerfile: Dockerfile
+#    volumes:
+#      - ./demo:/app
+#      - maven_repo:/root/.m2
+#    ports:
+#      - 2001:8080
+#    depends_on:
+#      - user_db
 
 
   device-service1:
@@ -49,19 +60,19 @@ services:
     depends_on:
       - device_db
 
-  device-service2:
-    container_name: device-service2
-    build:
-      context: ./demo1
-      dockerfile: Dockerfile
-    volumes:
-      - ./demo1:/app
-      - maven_repo:/root/.m2
-    ports:
-      - 3001:8080
-    depends_on:
-      - device_db
-
+#  device-service2:
+#    container_name: device-service2
+#    build:
+#      context: ./demo1
+#      dockerfile: Dockerfile
+#    volumes:
+#      - ./demo1:/app
+#      - maven_repo:/root/.m2
+#    ports:
+#      - 3001:8080
+#    depends_on:
+#      - device_db
+#
   user_db:
     container_name: user_db
     image: postgres
@@ -84,19 +95,20 @@ services:
     ports:
       - 1001:5432
 
-#  credential_db:
-#    container_name: credential_db
-#    image: postgres
-#    environment:
-#      POSTGRES_USER: postgres
-#      POSTGRES_PASSWORD: postgres
-#    volumes:
-#      - credential_db:/var/lib/postgresql/data
-#    ports:
-#      - 1002:5432
+
+  credential_db:
+    container_name: credential_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - credential_db:/var/lib/postgresql/data
+    ports:
+      - 1002:5432
 
 volumes:
   user_data:
   maven_repo:
   device_data:
-#  credential_db:
+  credential_db:

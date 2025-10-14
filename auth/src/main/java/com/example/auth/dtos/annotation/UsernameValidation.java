@@ -7,7 +7,6 @@ import jakarta.validation.ConstraintValidatorContext;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.springframework.security.config.http.MatcherType.regex;
 
 public class UsernameValidation implements ConstraintValidator<UsernameRestriction, String> {
     private String pattern;

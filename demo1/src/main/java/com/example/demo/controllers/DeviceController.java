@@ -3,6 +3,7 @@ package com.example.demo.controllers;
 import com.example.demo.dtos.DeviceDTO;
 import com.example.demo.dtos.DeviceDetailsDTO;
 import com.example.demo.services.DeviceService;
+import com.example.demo.services.JwtService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -19,13 +20,15 @@ import java.util.UUID;
 public class DeviceController {
 
     private final DeviceService deviceService;
+    private final JwtService jwtService;
 
-    public DeviceController(DeviceService deviceService) {
+    public DeviceController(DeviceService deviceService, JwtService jwtService) {
         this.deviceService = deviceService;
+        this.jwtService = jwtService;
     }
 
     @GetMapping
-    public ResponseEntity<List<DeviceDTO>> getDevices() {
+    public ResponseEntity<List<DeviceDTO>> getDevices(@RequestHeader("Authorization") String authHeader) {
         return ResponseEntity.ok(deviceService.findDevices());
     }
 
@@ -46,25 +49,25 @@ public class DeviceController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDevice(@PathVariable UUID id){
+    public ResponseEntity<Void> deleteDevice(@PathVariable UUID id) {
         boolean deleted = deviceService.delete(id);
         if (deleted)
             return ResponseEntity.status(204).build();
         else
             return ResponseEntity.status(404).build();
     }
+
     @PutMapping("/{id}")
     public ResponseEntity<DeviceDetailsDTO> updateDevice(@Valid @RequestBody DeviceDetailsDTO deviceDetailsDTO, @PathVariable UUID id) {
         DeviceDetailsDTO deviceDTO = deviceService.update(deviceDetailsDTO);
-        if (id.equals(deviceDTO.getId())){
+        if (id.equals(deviceDTO.getId())) {
             return ResponseEntity.status(204).body(deviceDTO);
-        }
-        else {
+        } else {
             URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(deviceDTO.getId())
-                .toUri();
+                    .fromCurrentRequest()
+                    .path("/{id}")
+                    .buildAndExpand(deviceDTO.getId())
+                    .toUri();
             return ResponseEntity.created(location).build();
         }
     }
