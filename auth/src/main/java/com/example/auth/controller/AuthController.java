@@ -41,12 +41,13 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterDTO registerDTO) {
-        UUID id = personService.insert(registerDTO.getUsername(), registerDTO.getPassword());
+        UUID id = personService.insert(registerDTO);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(id)
                 .toUri();
+        System.out.println(registerDTO);
         return ResponseEntity.created(location).build();
     }
 
@@ -59,7 +60,7 @@ public class AuthController {
     @PostMapping("/token")
     public String token(Authentication authentication) {
         Instant now = Instant.now();
-        long expiry = 10L;
+        long expiry = 300L;
         // @formatter:off
         String scope = authentication.getAuthorities().stream()
               .map(GrantedAuthority::getAuthority)

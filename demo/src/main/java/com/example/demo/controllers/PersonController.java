@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -31,8 +32,20 @@ public class PersonController {
         this.jwtService = jwtService;
     }
 
+    private void checkAdminRole(String authHeader) {
+        try {
+            String role = jwtService.getRoleFromToken(authHeader);
+            if (role == null || !role.equals("ROLE_ADMIN")) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: Admin role required");
+            }
+        } catch (ParseException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Token");
+        }
+    }
+
     @GetMapping
     public ResponseEntity<List<PersonDTO>> getPeople(@RequestHeader("Authorization") String authHeader) {
+        checkAdminRole(authHeader);
         try {
             String username = jwtService.getUsernameFromToken(authHeader);
         } catch (ParseException e) {
@@ -53,12 +66,14 @@ public class PersonController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<PersonDetailsDTO> getPerson(@PathVariable UUID id) {
+    public ResponseEntity<PersonDetailsDTO> getPerson(@PathVariable UUID id, @RequestHeader("Authorization") String authHeader) {
+        checkAdminRole(authHeader);
         return ResponseEntity.ok(personService.findPersonById(id));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePerson(@PathVariable UUID id){
+    public ResponseEntity<Void> deletePerson(@PathVariable UUID id, @RequestHeader("Authorization") String authHeader){
+        checkAdminRole(authHeader);
         boolean deleted = personService.delete(id);
         if (deleted)
             return ResponseEntity.status(204).build();
@@ -66,7 +81,8 @@ public class PersonController {
             return ResponseEntity.status(404).build();
     }
     @PutMapping("/{id}")
-    public ResponseEntity<PersonDetailsDTO> updatePerson(@Valid @RequestBody PersonDetailsDTO personDetailsDTO, @PathVariable UUID id) {
+    public ResponseEntity<PersonDetailsDTO> updatePerson(@Valid @RequestBody PersonDetailsDTO personDetailsDTO, @PathVariable UUID id, @RequestHeader("Authorization") String authHeader) {
+        checkAdminRole(authHeader);
         PersonDetailsDTO personDTO = personService.update(personDetailsDTO);
         if (id.equals(personDTO.getId())){
             return ResponseEntity.status(204).body(personDTO);

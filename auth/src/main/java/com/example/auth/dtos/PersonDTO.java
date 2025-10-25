@@ -6,11 +6,17 @@ public class PersonDTO {
     private UUID uuid;
     private String username;
     private String password;
+    private boolean admin;
 
-    public PersonDTO(UUID uuid, String username, String password) {
+    public PersonDTO(UUID uuid, String username, String password, boolean admin) {
         this.uuid = uuid;
         this.username = username;
         this.password = password;
+        this.admin = admin;
+    }
+
+    public UUID getUuid() {
+        return uuid;
     }
 
     public String getUsername() {
@@ -21,8 +27,7 @@ public class PersonDTO {
         return password;
     }
 
-    public UUID getUuid() {
-        return uuid;
+    public boolean isAdmin() {
+        return admin;
     }
-
 }

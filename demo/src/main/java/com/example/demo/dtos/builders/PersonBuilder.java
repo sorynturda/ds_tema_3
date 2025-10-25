@@ -18,7 +18,7 @@ public class PersonBuilder {
     }
 
     public static Person toEntity(PersonDetailsDTO personDetailsDTO) {
-        return new Person(personDetailsDTO.getName(),
+        return new Person(personDetailsDTO.getId() ,personDetailsDTO.getName(),
                 personDetailsDTO.getAddress(),
                 personDetailsDTO.getAge());
     }

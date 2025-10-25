@@ -18,9 +18,6 @@ public class Person  implements Serializable{
     private static final long serialVersionUID = 1L;
 
     @Id
-    @GeneratedValue
-    @UuidGenerator
-    @JdbcTypeCode(SqlTypes.UUID)
     private UUID id;
 
     @Column(name = "name", nullable = false)
@@ -36,7 +33,8 @@ public class Person  implements Serializable{
     public Person() {
     }
 
-    public Person(String name, String address, int age) {
+    public Person(UUID id, String name, String address, int age) {
+        this.id = id;
         this.name = name;
         this.address = address;
         this.age = age;

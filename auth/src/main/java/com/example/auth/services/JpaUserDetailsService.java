@@ -19,7 +19,7 @@ public class JpaUserDetailsService implements UserDetailsService {
         return personRepository.findByUsername(username)
                 .map(person -> User.withUsername(person.getUsername())
                         .password(person.getPassword())
-                        .authorities("app")
+                        .authorities(person.isAdmin() ? "ROLE_ADMIN" : "ROLE_USER")
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }

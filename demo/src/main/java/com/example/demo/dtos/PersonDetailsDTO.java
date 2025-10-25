@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public class PersonDetailsDTO {
 
+    @NotNull
     private UUID id;
 
     @NotBlank(message = "name is required")

@@ -23,7 +23,16 @@ public class JwtService {
         SignedJWT signedJWT = tokenParser.parse(token);
 
         JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
-
         return claimsSet.getSubject();
+    }
+
+    public String getRoleFromToken(String authHeader) throws ParseException {
+        String token = authHeader.substring(7);
+
+        SignedJWT signedJWT = tokenParser.parse(token);
+
+        JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
+
+        return (String) claimsSet.getClaim("scope");
     }
 }

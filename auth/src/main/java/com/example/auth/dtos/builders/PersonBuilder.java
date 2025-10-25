@@ -9,7 +9,7 @@ public class PersonBuilder {
     }
 
     public static PersonDTO toPersonDTO(Person person) {
-        return new PersonDTO(person.getId(), person.getUsername(), person.getPassword());
+        return new PersonDTO(person.getId(), person.getUsername(), person.getPassword(), person.isAdmin());
     }
 
 }

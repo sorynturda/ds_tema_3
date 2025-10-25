@@ -19,9 +19,9 @@ services:
       - maven_repo:/root/.m2
     ports:
       - 4000:8080
-
-  user-service1:
-    container_name: user-service1
+#replicas
+  user-service:
+    container_name: user-service
     build:
       context: ./demo
       dockerfile: Dockerfile
@@ -33,22 +33,9 @@ services:
     depends_on:
       - user_db
 
-#  user-service2:
-#    container_name: user-service2
-#    build:
-#      context: ./demo
-#      dockerfile: Dockerfile
-#    volumes:
-#      - ./demo:/app
-#      - maven_repo:/root/.m2
-#    ports:
-#      - 2001:8080
-#    depends_on:
-#      - user_db
 
-
-  device-service1:
-    container_name: device-service1
+  device-service:
+    container_name: device-service
     build:
       context: ./demo1
       dockerfile: Dockerfile
@@ -60,19 +47,6 @@ services:
     depends_on:
       - device_db
 
-#  device-service2:
-#    container_name: device-service2
-#    build:
-#      context: ./demo1
-#      dockerfile: Dockerfile
-#    volumes:
-#      - ./demo1:/app
-#      - maven_repo:/root/.m2
-#    ports:
-#      - 3001:8080
-#    depends_on:
-#      - device_db
-#
   user_db:
     container_name: user_db
     image: postgres

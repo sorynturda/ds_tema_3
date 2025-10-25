@@ -18,9 +18,6 @@ public class Person  implements Serializable{
     private static final long serialVersionUID = 1L;
 
     @Id
-    @GeneratedValue
-    @UuidGenerator
-    @JdbcTypeCode(SqlTypes.UUID)
     private UUID id;
 
     @Column(name = "username", nullable = false, unique = true)
@@ -29,17 +26,26 @@ public class Person  implements Serializable{
     @Column(name = "password", nullable = false)
     private String password;
 
+    @Column(name = "admin", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean admin = false;
+
     public Person(){
 
     }
 
-    public Person(String username, String password) {
+    public Person(UUID id, String username, String password, boolean admin) {
+        this.id = id;
         this.username = username;
         this.password = password;
+        this.admin = admin;
     }
 
     public UUID getId() {
         return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
     }
 
     public String getUsername() {
@@ -56,5 +62,13 @@ public class Person  implements Serializable{
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public boolean isAdmin() {
+        return admin;
+    }
+
+    public void setAdmin(boolean admin) {
+        this.admin = admin;
     }
 }

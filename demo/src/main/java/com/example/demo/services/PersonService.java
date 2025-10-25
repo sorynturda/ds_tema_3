@@ -44,7 +44,6 @@ public class PersonService {
         return PersonBuilder.toPersonDetailsDTO(prosumerOptional.get());
     }
 
-    @Transactional
     public UUID insert(PersonDetailsDTO personDTO) {
         Person person = PersonBuilder.toEntity(personDTO);
         person = personRepository.save(person);

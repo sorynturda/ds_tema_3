@@ -5,12 +5,15 @@ import com.example.demo.dtos.DeviceDTO;
 import com.example.demo.dtos.DeviceDetailsDTO;
 import com.example.demo.dtos.builders.DeviceBuilder;
 import com.example.demo.entities.Device;
+import com.example.demo.entities.UserDeviceMapping;
 import com.example.demo.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.demo.repositories.DeviceRepository;
+import com.example.demo.repositories.UserDeviceMappingRepository;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,10 +25,12 @@ import java.util.stream.Collectors;
 public class DeviceService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceService.class);
     private final DeviceRepository deviceRepository;
+    private final UserDeviceMappingRepository mappingRepository;
 
     @Autowired
-    public DeviceService(DeviceRepository deviceRepository) {
+    public DeviceService(DeviceRepository deviceRepository, UserDeviceMappingRepository mappingRepository) {
         this.deviceRepository = deviceRepository;
+        this.mappingRepository = mappingRepository;
     }
 
     @Transactional
@@ -55,30 +60,70 @@ public class DeviceService {
     @Transactional
     public DeviceDetailsDTO update(DeviceDetailsDTO deviceDTO) {
         Device device = deviceRepository.findById(deviceDTO.getId())
-            .map(existingDevice -> {
-                LOGGER.debug("Device with id {} will be updated in db", deviceDTO.getId());
-                existingDevice.setName(deviceDTO.getName());
-                existingDevice.setManufacturer(deviceDTO.getManufacturer());
-                return existingDevice;
-            })
-            .orElseGet(() -> {
-               LOGGER.debug("Device with id {} will be inserted in db", deviceDTO.getId());
-               return DeviceBuilder.toEntity(deviceDTO);
-            });
+                .map(existingDevice -> {
+                    LOGGER.debug("Device with id {} will be updated in db", deviceDTO.getId());
+                    existingDevice.setName(deviceDTO.getName());
+                    existingDevice.setManufacturer(deviceDTO.getManufacturer());
+                    return existingDevice;
+                })
+                .orElseGet(() -> {
+                    LOGGER.debug("Device with id {} will be inserted in db", deviceDTO.getId());
+                    return DeviceBuilder.toEntity(deviceDTO);
+                });
 
         Device savedDevice = deviceRepository.save(device);
         return DeviceBuilder.toDeviceDetailsDTO(savedDevice);
     }
 
     @Transactional
-    public boolean delete(UUID id){
-        if(deviceRepository.existsById(id)){
+    public boolean delete(UUID id) {
+        if (deviceRepository.existsById(id)) {
             deviceRepository.deleteById(id);
             LOGGER.debug("Device with id {} was deleted from db", id);
             return true;
-        }else {
-            LOGGER.debug("Device with id {} was not found in db",id);
+        } else {
+            LOGGER.debug("Device with id {} was not found in db", id);
             return false;
         }
+    }
+
+    @Transactional
+    public void assignDeviceToUser(UUID userId, UUID deviceId) {
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> {
+                    LOGGER.error("Device with id {} was not found in db", deviceId);
+                    return new ResourceNotFoundException(Device.class.getSimpleName() + " with id: " + deviceId);
+                });
+
+        UserDeviceMapping newMapping = new UserDeviceMapping(userId, device);
+        try {
+            mappingRepository.save(newMapping);
+            LOGGER.debug("Assigned device {} to user {}", deviceId, userId);
+        } catch (DataIntegrityViolationException e) {
+            LOGGER.warn("Device {} is already assigned to user {}", deviceId, userId);
+            throw new RuntimeException("Device is already assigned to this user");
+        }
+    }
+
+    @Transactional
+    public void unassignDeviceFromUser(UUID userId, UUID deviceId) {
+        UserDeviceMapping mapping = mappingRepository.findByUserIdAndDevice_Id(userId, deviceId)
+                .orElseThrow(() -> {
+                    LOGGER.error("Mapping not found for user {} and device {}", userId, deviceId);
+                    return new ResourceNotFoundException("Mapping not found for this user and device");
+                });
+
+        mappingRepository.delete(mapping);
+        LOGGER.debug("Unassigned device {} from user {}", deviceId, userId);
+    }
+
+    @Transactional
+    public List<DeviceDTO> findDevicesByUserId(UUID userId) {
+        List<UserDeviceMapping> mappings = mappingRepository.findByUserId(userId);
+
+        return mappings.stream()
+                .map(UserDeviceMapping::getDevice)
+                .map(DeviceBuilder::toDeviceDTO)
+                .collect(Collectors.toList());
     }
 }
