@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./nginx/config:/etc/nginx:ro
+      - ./frontend:/var/www/html
     ports:
       - 443:443
 

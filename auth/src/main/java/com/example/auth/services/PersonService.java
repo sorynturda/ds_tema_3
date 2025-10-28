@@ -52,4 +52,8 @@ public class PersonService {
         return person.getId();
     }
 
+    public UUID getUserId(String username){
+        Optional<Person> person = personRepository.findByUsername(username);
+        return person.get().getId();
+    }
 }

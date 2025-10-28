@@ -47,7 +47,6 @@ public class AuthController {
                 .path("/{id}")
                 .buildAndExpand(id)
                 .toUri();
-        System.out.println(registerDTO);
         return ResponseEntity.created(location).build();
     }
 
@@ -71,6 +70,7 @@ public class AuthController {
               .expiresAt(now.plusSeconds(expiry))
               .subject(authentication.getName())
               .claim("scope", scope)
+                .claim("userId", personService.getUserId(authentication.getName()))
               .build();
         // @formatter:on
         return this.encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();

@@ -105,8 +105,8 @@ public class DeviceController {
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<DeviceDTO>> getDevicesForUser(@PathVariable UUID userId, @RequestHeader("Authorization") String authHeader) {
-        checkAdminRole(authHeader);
+    public ResponseEntity<List<DeviceDTO>> getDevicesForUser(@PathVariable UUID userId){//, @RequestHeader("Authorization") String authHeader) {
+//        checkAdminRole(authHeader);
         return ResponseEntity.ok(deviceService.findDevicesByUserId(userId));
     }
 
