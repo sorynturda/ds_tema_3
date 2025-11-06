@@ -3,96 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Management System</title>
+    <title>Energy Management Dashboard</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // Configuration for API base URL
+        // Leave empty for relative paths (when behind Nginx proxy)
+        // Set to full URL if needed: window.API_BASE_URL = 'http://localhost:8080';
+        window.API_BASE_URL = '';
+    </script>
+    <script src="app.js" defer></script>
 </head>
 <body>
 
-    <nav>
-        <h1>Energy Management System</h1>
-        <button id="logout-button" style="display: none;">Logout</button>
-    </nav>
+    <div id="auth-container">
+        <form id="login-form" class="auth-form">
+            <h2>Login</h2>
+            <label for="login-username">Username:</label>
+            <input type="text" id="login-username" required>
+            <label for="login-password">Password:</label>
+            <input type="password" id="login-password" required>
+            <button type="submit">Login</button>
+            <p>New user? <a href="#" id="show-register-link">Register here</a></p>
+        </form>
 
-    <main>
-        <div id="login-page" class="page active">
-            <form id="login-form" class="form-container">
-                <h2>Login</h2>
-                <div class="form-group">
-                    <label for="login-username">Username</label>
-                    <input type="text" id="login-username" required>
-                </div>
-                <div class="form-group">
-                    <label for="login-password">Password</label>
-                    <input type="password" id="login-password" required>
-                </div>
-                <button type="submit">Login</button>
-                <p>New user? <a href="#" id="show-register-link">Register here</a></p>
-                <p id="login-error" class="error-message"></p>
-            </form>
-        </div>
+        <form id="register-form" class="auth-form hidden">
+            <h2>Register</h2>
+            <label for="reg-username">Username:</label>
+            <input type="text" id="reg-username" required>
+            <label for="reg-password">Password:</label>
+            <input type="password" id="reg-password" required>
+            <label for="reg-name">Full Name:</label>
+            <input type="text" id="reg-name" required>
+            <label for="reg-address">Address:</label>
+            <input type="text" id="reg-address">
+            <label for="reg-age">Age:</label>
+            <input type="number" id="reg-age" min="18">
+            <button type="submit">Register</button>
+            <p>Already registered? <a href="#" id="show-login-link">Login here</a></p>
+        </form>
+    </div>
 
-        <div id="register-page" class="page">
-            <form id="register-form" class="form-container">
-                <h2>Register</h2>
-                <div class="form-group">
-                    <label for="reg-username">Username (required)</label>
-                    <input type="text" id="reg-username" required>
-                </div>
-                <div class="form-group">
-                    <label for="reg-password">Password (required)</label>
-                    <input type="password" id="reg-password" required>
-                </div>
-                <div class="form-group">
-                    <label for="reg-name">Name (required)</label>
-                    <input type="text" id="reg-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="reg-address">Address</label>
-                    <input type="text" id="reg-address">
-                </div>
-                <div class="form-group">
-                    <label for="reg-age">Age</label>
-                    <input type="number" id="reg-age">
-                </div>
-                <button type="submit">Register</button>
-                <p>Already registered? <a href="#" id="show-login-link">Login here</a></p>
-                <p id="register-error" class="error-message"></p>
-            </form>
-        </div>
+    <div id="app-container" class="hidden">
+        <header>
+            <h1>Energy Dashboard</h1>
+            <div id="user-greeting"></div>
+            <button id="logout-button">Logout</button>
+        </header>
 
-        <div id="client-dashboard" class="page">
-            <h2>My Devices</h2>
-            <p>Here are the devices assigned to your account.</p>
-            <div id="client-devices-list" class="devices-grid">
-                </div>
-        </div>
+        <main>
+            <section id="user-info-section">
+                <h3>My Information</h3>
+                <div id="user-info-details"></div>
+            </section>
 
-        <div id="admin-dashboard" class="page">
-            <h2>Admin Dashboard</h2>
-            <div class="admin-grid">
+            <section id="client-section" class="hidden">
+                <h2>My Devices</h2>
+                <div id="client-device-list-container">
+                    </div>
+            </section>
 
-                <section class="admin-section">
-                    <h3>User Management</h3>
-                    <form id="user-form" class="admin-form">
-                        <h4>Add/Edit User</h4>
-                        <input type="hidden" id="user-id">
-                        <div class="form-group">
-                            <label for="user-name">Name</label>
-                            <input type="text" id="user-name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="user-address">Address</label>
-                            <input type="text" id="user-address" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="user-age">Age (min 18)</label>
-                            <input type="number" id="user-age" min="18" required>
-                        </div>
-                        <button type="submit">Save User</button>
-                        <button type="button" id="clear-user-form">Clear</button>
-                    </form>
-                    <h4>All Users</h4>
-                    <table id="user-table">
+            <section id="admin-section" class="hidden">
+                <div class="admin-panel">
+                    <h2>User Management</h2>
+                    <table id="admin-user-list">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -101,69 +74,87 @@
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="user-table-body">
-                            </tbody>
+                        <tbody></tbody>
                     </table>
-                </section>
+                </div>
 
-                <section class="admin-section">
-                    <h3>Device Management</h3>
-                    <form id="device-form" class="admin-form">
-                        <h4>Add/Edit Device</h4>
-                        <input type="hidden" id="device-id">
-                        <div class="form-group">
-                            <label for="device-name">Name</label>
-                            <input type="text" id="device-name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="device-manufacturer">Manufacturer</label>
-                            <input type="text" id="device-manufacturer" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="device-consumption">Consumption</label>
-                            <input type="number" id="device-consumption" required>
-                        </div>
-                        <button type="submit">Save Device</button>
-                        <button type="button" id="clear-device-form">Clear</button>
-                    </form>
-                    <h4>All Devices</h4>
-                    <table id="device-table">
+                <div class="admin-panel">
+                    <h2>Device Management</h2>
+                    <button id="show-create-device-modal-button">Create New Device</button>
+                    <table id="admin-device-list">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>Consumption</th>
+                                <th>Assigned To (User ID)</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="device-table-body">
-                            </tbody>
+                        <tbody></tbody>
                     </table>
-                </section>
+                </div>
+            </section>
+        </main>
+    </div>
 
-                <section class="admin-section" id="mapping-section">
-                    <h3>Device Mapping</h3>
-                    <form id="mapping-form" class="admin-form">
-                        <div class="form-group">
-                            <label for="mapping-user-select">Select User</label>
-                            <select id="mapping-user-select" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="mapping-device-select">Select Device</label>
-                            <select id="mapping-device-select" required></select>
-                        </div>
-                        <div class="button-group">
-                            <button type="button" id="assign-device-button">Assign Device</button>
-                            <button type="button" id="unassign-device-button">Unassign Device</button>
-                        </div>
-                        <p id="mapping-message" class="success-message"></p>
-                    </form>
-                </section>
-            </div>
+    <div id="user-form-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" data-modal="user-form-modal">&times;</span>
+            <h3 id="user-form-title">User Form</h3>
+            <form id="user-form">
+                <input type="hidden" id="user-form-id">
+                <label for="user-form-name">Name:</label>
+                <input type="text" id="user-form-name" required>
+                <label for="user-form-address">Address:</label>
+                <input type="text" id="user-form-address" required>
+                <label for="user-form-age">Age:</label>
+                <input type="number" id="user-form-age" min="18" required>
+                <button type="submit">Save User</button>
+            </form>
         </div>
+    </div>
 
-    </main>
-    
-    <script src="app.js"></script>
+    <div id="device-form-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" data-modal="device-form-modal">&times;</span>
+            <h3 id="device-form-title">Device Form</h3>
+            <form id="device-form">
+                <input type="hidden" id="device-form-id">
+                <label for="device-form-name">Name:</label>
+                <input type="text" id="device-form-name" required>
+                <label for="device-form-manufacturer">Manufacturer:</label>
+                <input type="text" id="device-form-manufacturer" required>
+                <label for="device-form-consumption">Max Consumption:</label>
+                <input type="number" id="device-form-consumption" required>
+                <button type="submit">Save Device</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="assign-device-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" data-modal="assign-device-modal">&times;</span>
+            <h3>Assign Device</h3>
+            <form id="assign-device-form">
+                <input type="hidden" id="assign-device-id">
+                <label for="user-select-dropdown">Assign to User:</label>
+                <select id="user-select-dropdown" required>
+                    <option value="">-- Select a User --</option>
+                    </select>
+                <button type="submit">Assign</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="view-device-details-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" data-modal="view-device-details-modal">&times;</span>
+            <h3>Device Details</h3>
+            <div id="view-device-details-content">
+                </div>
+        </div>
+    </div>
+
 </body>
 </html>

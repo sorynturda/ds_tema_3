@@ -15,10 +15,15 @@
 package com.example.auth.controller;
 
 
+import com.example.auth.entities.Person;
+import com.example.auth.services.PersonService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
  * A controller for the hello resource.
@@ -29,9 +34,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth")
 public class HelloController {
 
-	@GetMapping("/")
-	public String hello(Authentication authentication) {
-		return "Hello, " + authentication.getName() + "!";
-	}
+    @Autowired
+    PersonService personService;
+
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
+        try {
+            Person person = personService.getPersonByUsernameAndAdmin(authentication.getName());
+            personService.deletePerson(id);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+    }
 
 }

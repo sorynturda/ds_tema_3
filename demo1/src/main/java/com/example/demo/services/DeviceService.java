@@ -10,6 +10,8 @@ import com.example.demo.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.demo.repositories.DeviceRepository;
 import com.example.demo.repositories.UserDeviceMappingRepository;
 import jakarta.transaction.Transactional;
+import org.apache.catalina.User;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -125,5 +127,13 @@ public class DeviceService {
                 .map(UserDeviceMapping::getDevice)
                 .map(DeviceBuilder::toDeviceDTO)
                 .collect(Collectors.toList());
+    }
+
+    public @Nullable UserDeviceMapping findAssignDevice(UUID deviceId) {
+        Optional<Device> device = deviceRepository.findById(deviceId);
+        if(device.isEmpty())
+            throw new ResourceNotFoundException("Device is not assigned");
+
+        return mappingRepository.findByDevice(device.get().getId());
     }
 }

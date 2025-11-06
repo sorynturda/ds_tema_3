@@ -74,10 +74,10 @@ public class SecurityConfig {
         // @formatter:off
     http
             .authorizeHttpRequests((authorize) -> authorize
-                    .requestMatchers("/auth/token", "/auth/register", "/auth/validate").permitAll()
+                    .requestMatchers("/auth/token", "/auth/register", "/auth/validate", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     .anyRequest().authenticated()
             )
-            .csrf((csrf) -> csrf.ignoringRequestMatchers("/auth/token", "/auth/register", "/auth/validate"))
+            .csrf((csrf) -> csrf.ignoringRequestMatchers("/auth/token", "/auth/register", "/auth/validate", "/auth/delete"))
             .httpBasic(Customizer.withDefaults())
             .oauth2ResourceServer(jwt -> jwt.jwt(Customizer.withDefaults()))
             .sessionManagement((session) -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

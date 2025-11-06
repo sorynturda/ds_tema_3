@@ -1,20 +1,24 @@
-# generate a public - private key
+## In order to run the application, docker must be installed on the machine
+```sh
+$ docker compose up -d --build # this command automatically builds the docker images
+                               # and keep the containers running in detatched mode
+```
+
+
+### generate a public - private key for auth-service (in the same folder where application.properties is located)
 
 ```sh
 $ openssl genrsa -out app.key 2048
 ```
 
-# extract the public key (for JWT)
+### extract the public key (for JWT)
 
 ```sh
 $ openssl rsa -in app.key -pubout > app.pub
 ```
 
-# generate certificate (CA for ssl)
+### generate certificate (CA for ssl)
 
 ```sh
-$ openssl req -x509 -key private.key -out certificate.crt -days 365
+$ openssl req -x509 -key nginx.key -out site.crt -days 365
 ```
-
-
-

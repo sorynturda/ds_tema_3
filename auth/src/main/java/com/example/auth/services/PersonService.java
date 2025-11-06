@@ -27,6 +27,7 @@ public class PersonService {
     private final RestTemplate restTemplate;
     @Value("${user.service}")
     private String userServiceURL;
+
     @Autowired
     public PersonService(PersonRepository personRepository, PasswordEncoder passwordEncoder, RestTemplate restTemplate) {
         this.personRepository = personRepository;
@@ -52,8 +53,31 @@ public class PersonService {
         return person.getId();
     }
 
-    public UUID getUserId(String username){
+    public UUID getUserId(String username) {
         Optional<Person> person = personRepository.findByUsername(username);
         return person.get().getId();
+    }
+
+    public Person getPersonByUsernameAndAdmin(String username) {
+        Optional<Person> person = personRepository.findPersonByUsernameAndAdmin(username);
+        if (person.isEmpty()) {
+            LOGGER.debug("Person with username {} does not have administrator rights", username);
+            throw new ResourceNotFoundException("User is not");
+        } else {
+            LOGGER.debug("DEBUGDEBUG");
+            return person.get();
+        }
+    }
+
+    @Transactional
+    public void deletePerson(UUID uuid) {
+        personRepository.delete(personRepository.findById(uuid).get());
+        try {
+            String userServiceUrl = userServiceURL + "/people/" + uuid;
+            restTemplate.delete(userServiceUrl);
+            LOGGER.debug("Person with id {} deleted successfully!", uuid);
+        } catch (Exception e) {
+            throw new RuntimeException("Error deleting person in user service: " + e.getMessage(), e);
+        }
     }
 }

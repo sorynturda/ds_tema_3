@@ -2,6 +2,8 @@ package com.example.demo.controllers;
 
 import com.example.demo.dtos.DeviceDTO;
 import com.example.demo.dtos.DeviceDetailsDTO;
+import com.example.demo.entities.Device;
+import com.example.demo.entities.UserDeviceMapping;
 import com.example.demo.services.DeviceService;
 import com.example.demo.services.JwtService;
 import jakarta.validation.Valid;
@@ -109,5 +111,18 @@ public class DeviceController {
 //        checkAdminRole(authHeader);
         return ResponseEntity.ok(deviceService.findDevicesByUserId(userId));
     }
+
+    @GetMapping("/user-mapping/{deviceId}")
+    public ResponseEntity<String> getUserByDevice(@PathVariable UUID deviceId){//, @RequestHeader("Authorization") String authHeader) {
+//        checkAdminRole(authHeader);
+        UserDeviceMapping udm = deviceService.findAssignDevice(deviceId);
+        try {
+            return ResponseEntity.ok().body(udm.getUserId().toString());
+        }
+        catch (Exception e){
+            return ResponseEntity.ok().body("");
+        }
+    }
+
 
 }
