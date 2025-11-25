@@ -2,3 +2,5 @@
 *.crt
 *.pub
 *.venv
+*.env
+*__pycache__

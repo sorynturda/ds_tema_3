@@ -1,8 +1,11 @@
-package com.example.auth.dtos.builders;
+package com.example.auth.dtos;
 
+import java.io.Serializable;
 import java.util.UUID;
 
-public class PersonSyncDTO {
+public class PersonSyncDTO implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private UUID id;
     private String name;
     private String address;
