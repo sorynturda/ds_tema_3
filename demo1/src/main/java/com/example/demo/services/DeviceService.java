@@ -80,8 +80,20 @@ public class DeviceService {
     @Transactional
     public boolean delete(UUID id) {
         if (deviceRepository.existsById(id)) {
+
+            UUID userId = null;
+            try {
+                UserDeviceMapping mapping = mappingRepository.findByDevice(id);
+                if (mapping != null) {
+                    userId = mapping.getUserId();
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Could not find or delete mapping for device {} during deletion: {}", id, e.getMessage());
+            }
+
             deviceRepository.deleteById(id);
             LOGGER.debug("Device with id {} was deleted from db", id);
+
             return true;
         } else {
             LOGGER.debug("Device with id {} was not found in db", id);
@@ -131,9 +143,19 @@ public class DeviceService {
 
     public @Nullable UserDeviceMapping findAssignDevice(UUID deviceId) {
         Optional<Device> device = deviceRepository.findById(deviceId);
-        if(device.isEmpty())
+        if (device.isEmpty())
             throw new ResourceNotFoundException("Device is not assigned");
 
         return mappingRepository.findByDevice(device.get().getId());
+    }
+
+    public boolean checkMapping(UUID deviceId, UUID userId) {
+        try {
+            UserDeviceMapping mapping = mappingRepository.findByDevice(deviceId);
+            return mapping != null && mapping.getUserId().equals(userId);
+        } catch (Exception e) {
+            LOGGER.error("Error checking mapping for device {} and user {}: {}", deviceId, userId, e.getMessage());
+            return false;
+        }
     }
 }

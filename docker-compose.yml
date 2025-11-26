@@ -1,4 +1,68 @@
 services:
+  rp:
+    container_name: rp
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    volumes:
+      - ./nginx/config:/etc/nginx:ro
+      - ./frontend:/var/www/html
+    ports:
+      - 443:443
+    depends_on:
+      - auth-service
+      - user-service
+      - device-service
+
+  auth-service:
+    container_name: auth-service
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    volumes:
+      - ./auth:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 4000:8080
+    depends_on:
+      - rabbit
+
+#replicas
+  user-service:
+    container_name: user-service
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    volumes:
+      - ./demo:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 2000:8080
+    depends_on:
+      - user_db
+      - rabbit
+
+  device-service:
+    container_name: device-service
+    build:
+      context: ./demo1
+      dockerfile: Dockerfile
+    volumes:
+      - ./demo1:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 3000:8080
+    depends_on:
+      - device_db
+
+  monitoring-service:
+    container_name: monitoring-service
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile
+    depends_on:
+      - monitoring_db
+
   rabbit:
     container_name: rabbit
     image: rabbitmq:management
@@ -11,7 +75,60 @@ services:
     volumes:
       - rabbitmq-lib:/var/lib/rabbitmq/
       - rabbitmq-log:/var/log/rabbitmq
+    depends_on:
+      - monitoring-service
+
+  user_db:
+    container_name: user_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - user_data:/var/lib/postgresql
+    ports:
+      - 1000:5432
+
+  device_db:
+    container_name: device_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - device_data:/var/lib/postgresql
+    ports:
+      - 1001:5432
+
+
+  credential_db:
+    container_name: credential_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - credential_data:/var/lib/postgresql
+    ports:
+      - 1002:5432
+
+  monitoring_db:
+    container_name: monitoring_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - monitoring_data:/var/lib/postgresql
+    ports:
+      - 1003:5432
+
 
 volumes:
+  user_data:
+  maven_repo:
+  device_data:
+  credential_data:
+  monitoring_data:
   rabbitmq-lib:
   rabbitmq-log:

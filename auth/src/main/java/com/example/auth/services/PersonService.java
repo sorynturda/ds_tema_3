@@ -1,9 +1,7 @@
 package com.example.auth.services;
 
-import com.example.auth.dtos.PersonDTO;
 import com.example.auth.dtos.RegisterDTO;
-import com.example.auth.dtos.builders.PersonBuilder;
-import com.example.auth.dtos.builders.PersonSyncDTO;
+import com.example.auth.dtos.PersonSyncDTO;
 import com.example.auth.entities.Person;
 import com.example.auth.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.auth.repositories.PersonRepository;
@@ -14,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationAdapter;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
@@ -25,16 +25,18 @@ public class PersonService {
     private final PersonRepository personRepository;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate;
+    private final ProducerService producerService;
     @Value("${user.service}")
     private String userServiceURL;
 
     @Autowired
-    public PersonService(PersonRepository personRepository, PasswordEncoder passwordEncoder, RestTemplate restTemplate) {
+    public PersonService(PersonRepository personRepository, PasswordEncoder passwordEncoder, RestTemplate restTemplate, ProducerService producerService) {
         this.personRepository = personRepository;
         this.passwordEncoder = passwordEncoder;
         this.restTemplate = restTemplate;
+        this.producerService = producerService;
     }
-
+    @Transactional
     public UUID insert(RegisterDTO user) {
         UUID newUserId = UUID.randomUUID();
         Person person = personRepository.save(
@@ -42,13 +44,22 @@ public class PersonService {
         LOGGER.debug("Person with id {} was inserted in db", person.getId());
 
         PersonSyncDTO userSyncRequest = new PersonSyncDTO(newUserId, user.getName(), user.getAddress(), user.getAge());
-        try {
-            String userServiceUrl = userServiceURL + "/people";
-            restTemplate.postForObject(userServiceUrl, userSyncRequest, Void.class);
 
-        } catch (Exception e) {
-            personRepository.deleteById(newUserId);
-            throw new RuntimeException("Error creating user: " + e.getMessage());
+//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+//            @Override
+//            public void afterCommit() {
+//                try {
+//                    producerService.createUser(userSyncRequest);
+//                } catch (Exception e) {
+//                    LOGGER.error("Failed to publish PersonSyncDTO for ID {}", newUserId, e);
+//                }
+//            }
+//        });
+        try{
+            producerService.createUser(userSyncRequest);
+        }
+        catch (Exception e){
+            LOGGER.error("Failed to publish PersonSyncDTO for ID {}", newUserId, e);
         }
         return person.getId();
     }
@@ -73,8 +84,7 @@ public class PersonService {
     public void deletePerson(UUID uuid) {
         personRepository.delete(personRepository.findById(uuid).get());
         try {
-            String userServiceUrl = userServiceURL + "/people/" + uuid;
-            restTemplate.delete(userServiceUrl);
+            producerService.deleteUser(uuid);
             LOGGER.debug("Person with id {} deleted successfully!", uuid);
         } catch (Exception e) {
             throw new RuntimeException("Error deleting person in user service: " + e.getMessage(), e);
