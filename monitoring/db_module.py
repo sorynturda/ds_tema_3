@@ -68,9 +68,50 @@ def write_raw_data(device_id, user_id, timestamp_str, consumption):
 
 
     except Exception as e:
-        # Critical error; should log and potentially let the RabbitMQ ack fail
         print(f"[DB_Module] CRITICAL ERROR during DB write: {e}")
         raise e
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_daily_consumption(device_id, date_str):
+    """
+    Retrieves hourly aggregated consumption for a specific device and date.
+    Returns a list of dictionaries: [{'hour': 0, 'value': 1.5}, ...]
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = """
+        SELECT EXTRACT(HOUR FROM timestamp) as hour, SUM(consumption_kwh) as total
+        FROM raw_measurements
+        WHERE device_id = %s AND DATE(timestamp) = %s
+        GROUP BY hour
+        ORDER BY hour;
+        """
+
+        cursor.execute(query, (device_id, date_str))
+        rows = cursor.fetchall()
+        
+        print(f"[DB_Module] Query for {device_id} on {date_str} returned {len(rows)} rows.")
+        if rows:
+            print(f"[DB_Module] Sample row: {rows[0]}")
+
+        result = []
+        for row in rows:
+            result.append({
+                "hour": int(row[0]),
+                "value": float(row[1])
+            })
+        
+        return result
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR fetching daily consumption: {e}")
+        return []
     finally:
         if conn:
             conn.close()

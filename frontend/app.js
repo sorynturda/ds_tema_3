@@ -68,7 +68,7 @@ async function initApp() {
     } else {
         showAuthView();
     }
-    
+
     attachEventListeners();
 }
 
@@ -126,7 +126,7 @@ function attachEventListeners() {
     adminUserListBody.addEventListener('click', (e) => {
         const target = e.target.closest('button');
         if (!target) return;
-        
+
         const id = target.dataset.id;
         if (target.classList.contains('edit-user-btn')) {
             showEditUserModal(id);
@@ -138,7 +138,7 @@ function attachEventListeners() {
     adminDeviceListBody.addEventListener('click', (e) => {
         const target = e.target.closest('button');
         if (!target) return;
-        
+
         const id = target.dataset.id;
         if (target.classList.contains('edit-device-btn')) {
             showEditDeviceModal(id);
@@ -149,14 +149,18 @@ function attachEventListeners() {
         } else if (target.classList.contains('unassign-device-btn')) {
             const userIdToUnassign = target.dataset.userid;
             handleUnassignDevice(id, userIdToUnassign);
+        } else if (target.classList.contains('view-consumption-btn')) {
+            const ownerId = target.dataset.ownerid;
+            handleViewDeviceDetails(id, ownerId);
         }
     });
-    
+
     // Client: View Device Details
     clientDeviceListContainer.addEventListener('click', (e) => {
         const target = e.target.closest('button');
         if (target && target.classList.contains('view-device-details-btn')) {
-            handleViewDeviceDetails(target.dataset.id);
+            // For client, ownerId is the logged-in userId
+            handleViewDeviceDetails(target.dataset.id, userId);
         }
     });
 }
@@ -180,14 +184,14 @@ async function handleLogin(e) {
             'Authorization': 'Basic ' + btoa(username + ':' + password)
         };
         const tokenText = await apiFetch('/auth/token', { method: 'POST', headers }, 'text');
-        
+
         parseAndStoreToken(tokenText);
         showDashboard();
         loginForm.reset();
     } catch (error) {
         console.error('Login error:', error);
         // Check if it's an authentication failure
-        if (error.message.includes('401') || 
+        if (error.message.includes('401') ||
             error.message.toLowerCase().includes('unauthorized') ||
             error.message.toLowerCase().includes('authentication') ||
             error.message.toLowerCase().includes('credentials')) {
@@ -252,7 +256,7 @@ function showDashboard() {
     // Reset views
     clientSection.classList.add('hidden');
     adminSection.classList.add('hidden');
-    
+
     // Load common data
     loadMyInfo();
 
@@ -307,7 +311,7 @@ async function loadClientData() {
             clientDeviceListContainer.innerHTML = '<p>You have no devices assigned to you.</p>';
             return;
         }
-        
+
         devices.forEach(device => {
             const card = document.createElement('div');
             card.className = 'device-card';
@@ -369,7 +373,7 @@ async function loadAllDevices() {
     try {
         const devices = await apiFetch('/devices');
         adminDeviceListBody.innerHTML = '';
-        
+
         // Fetch assignment info for each device
         const devicesWithAssignments = await Promise.all(
             devices.map(async (device) => {
@@ -381,16 +385,23 @@ async function loadAllDevices() {
                 }
             })
         );
-        
+
         devicesWithAssignments.forEach(device => {
             const row = document.createElement('tr');
             const assignedUserId = device.assignedUserId;
-            
+
             let assignmentButton;
+            let viewConsumptionButton = '';
+
             if (assignedUserId) {
                 assignmentButton = `
                     <button class="unassign-device-btn secondary" data-id="${device.id}" data-userid="${assignedUserId}">
                         Unassign
+                    </button>
+                `;
+                viewConsumptionButton = `
+                    <button class="view-consumption-btn" data-id="${device.id}" data-ownerid="${assignedUserId}">
+                        View Consumption
                     </button>
                 `;
             } else {
@@ -411,6 +422,7 @@ async function loadAllDevices() {
                         <button class="edit-device-btn" data-id="${device.id}">Edit</button>
                         <button class="delete-device-btn danger" data-id="${device.id}">Delete</button>
                         ${assignmentButton}
+                        ${viewConsumptionButton}
                     </div>
                 </td>
             `;
@@ -455,7 +467,7 @@ async function showEditUserModal(id) {
 async function handleUserFormSubmit(e) {
     e.preventDefault();
     const id = document.getElementById('user-form-id').value;
-    
+
     const personDetailsDTO = {
         name: document.getElementById('user-form-name').value,
         address: document.getElementById('user-form-address').value,
@@ -489,16 +501,16 @@ async function handleUserFormSubmit(e) {
 
 async function handleDeleteUser(id) {
     if (!confirm('Are you sure you want to delete this user?')) return;
-    
+
     try {
         // First, check if the user has any assigned devices
         const userDevices = await apiFetch(`/devices/user/${id}`);
-        
+
         if (userDevices && userDevices.length > 0) {
             alert('Cannot delete user: Please unassign all devices from this user before removing it.');
             return;
         }
-        
+
         // If no devices assigned, proceed with deletion
         await apiFetch(`/auth/delete/${id}`, { method: 'DELETE' });
         alert('User deleted.');
@@ -506,7 +518,7 @@ async function handleDeleteUser(id) {
     } catch (error) {
         console.error('Delete user error:', error);
         // Check if error is related to assigned devices
-        if (error.message.toLowerCase().includes('device') || 
+        if (error.message.toLowerCase().includes('device') ||
             error.message.toLowerCase().includes('assigned') ||
             error.message.toLowerCase().includes('constraint') ||
             error.message.toLowerCase().includes('foreign key')) {
@@ -551,6 +563,11 @@ async function handleDeviceFormSubmit(e) {
         consumption: parseInt(document.getElementById('device-form-consumption').value)
     };
 
+    if (deviceDetailsDTO.consumption < 0) {
+        alert('Consumption cannot be negative.');
+        return;
+    }
+
     try {
         if (id) {
             // Update (PUT) - include ID in the body for update
@@ -575,16 +592,16 @@ async function handleDeviceFormSubmit(e) {
 
 async function handleDeleteDevice(id) {
     if (!confirm('Are you sure you want to delete this device?')) return;
-    
+
     try {
         // First, check if the device is assigned to any user
         const assignedUserId = await apiFetch(`/devices/user-mapping/${id}`, {}, 'text');
-        
+
         if (assignedUserId && assignedUserId.trim() !== '') {
             alert('Cannot delete device: Please unassign this device from all users before removing it.');
             return;
         }
-        
+
         // If not assigned, proceed with deletion
         await apiFetch(`/devices/${id}`, { method: 'DELETE' });
         alert('Device deleted.');
@@ -592,7 +609,7 @@ async function handleDeleteDevice(id) {
     } catch (error) {
         console.error('Delete device error:', error);
         // Check if error is related to device assignment
-        if (error.message.toLowerCase().includes('user') || 
+        if (error.message.toLowerCase().includes('user') ||
             error.message.toLowerCase().includes('assigned') ||
             error.message.toLowerCase().includes('constraint') ||
             error.message.toLowerCase().includes('foreign key') ||
@@ -609,7 +626,7 @@ async function handleDeleteDevice(id) {
 function showAssignDeviceModal(deviceId) {
     assignDeviceForm.reset();
     document.getElementById('assign-device-id').value = deviceId;
-    
+
     // Populate user dropdown from cache
     const userSelect = document.getElementById('user-select-dropdown');
     userSelect.innerHTML = '<option value="">-- Select a User --</option>'; // Reset
@@ -619,7 +636,7 @@ function showAssignDeviceModal(deviceId) {
         option.textContent = `${user.name} (ID: ${user.id})`;
         userSelect.appendChild(option);
     });
-    
+
     assignDeviceModal.classList.remove('hidden');
 }
 
@@ -634,8 +651,8 @@ async function handleAssignDeviceSubmit(e) {
     }
 
     try {
-        await apiFetch(`/devices/mapping?userId=${selectedUserId}&deviceId=${deviceId}`, { 
-            method: 'POST' 
+        await apiFetch(`/devices/mapping?userId=${selectedUserId}&deviceId=${deviceId}`, {
+            method: 'POST'
         });
         alert('Device assigned successfully.');
         assignDeviceModal.classList.add('hidden');
@@ -661,21 +678,184 @@ async function handleUnassignDevice(deviceId, userIdToUnassign) {
 
 // --- View Device Details (Client) ---
 
-async function handleViewDeviceDetails(id) {
+let currentChart = null;
+let currentWs = null;
+
+async function handleViewDeviceDetails(id, ownerId) {
     try {
         const device = await apiFetch(`/devices/${id}`);
         const content = document.getElementById('view-device-details-content');
+
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+
         content.innerHTML = `
-            <p><strong>ID:</strong> ${device.id}</p>
-            <p><strong>Name:</strong> ${device.name}</p>
-            <p><strong>Manufacturer:</strong> ${device.manufacturer}</p>
-            <p><strong>Max Consumption:</strong> ${device.consumption} kWh</p>
+            <div class="details-header">
+                <p><strong>ID:</strong> ${device.id}</p>
+                <p><strong>Name:</strong> ${device.name}</p>
+                <p><strong>Manufacturer:</strong> ${device.manufacturer}</p>
+                <p><strong>Max Consumption:</strong> ${device.consumption} kWh</p>
+                <p><strong>Owner ID:</strong> ${ownerId}</p>
+            </div>
+            
+            <div class="real-time-section" style="margin: 20px 0; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+                <h4>Real-Time Consumption</h4>
+                <p style="font-size: 1.2em;">Current Value: <strong id="rt-value">Waiting for data...</strong> kWh</p>
+            </div>
+
+            <div class="history-section" style="margin-top: 20px;">
+                <h4>Historical Consumption</h4>
+                <label for="history-date">Select Date:</label>
+                <input type="date" id="history-date" value="${today}">
+                <div style="position: relative; height: 300px; width: 100%; margin-top: 10px;">
+                    <canvas id="consumption-chart"></canvas>
+                </div>
+            </div>
         `;
+
         viewDeviceDetailsModal.classList.remove('hidden');
+
+        // Initialize Chart
+        const ctx = document.getElementById('consumption-chart').getContext('2d');
+        if (currentChart) {
+            currentChart.destroy();
+        }
+
+        currentChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Array.from({ length: 24 }, (_, i) => i + ':00'),
+                datasets: [{
+                    label: 'Energy Consumption (kWh)',
+                    data: new Array(24).fill(0),
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'kWh'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hour of Day'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fetch initial data
+        await updateChartData(id, today);
+
+        // Date picker listener
+        document.getElementById('history-date').addEventListener('change', (e) => {
+            updateChartData(id, e.target.value);
+        });
+
+        // --- WebSocket Setup ---
+        setupWebSocket(ownerId, id);
+
     } catch (error) {
         alert('Failed to load device details: ' + error.message);
     }
 }
+
+async function updateChartData(deviceId, date) {
+    try {
+        // Assuming the monitoring service is on port 8000 and accessible via proxy or direct
+        // Since apiFetch uses window.API_BASE_URL, we might need to adjust if monitoring is on a different port/path
+        // For this setup, I'll assume /monitoring prefix is proxied or we use a direct URL if needed.
+        // However, the current apiFetch points to the main backend. 
+        // If monitoring is a separate service, we need its URL.
+        // Based on file structure, it seems like a microservices setup.
+        // I will assume for now that the API gateway routes /monitoring requests to the monitoring service.
+
+        console.log(`Fetching history for ${deviceId} on ${date}`);
+        const data = await apiFetch(`/monitoring/history/${deviceId}?date=${date}`);
+        console.log("Received history data:", data);
+
+        // Reset data
+        const hourlyData = new Array(24).fill(0);
+
+        if (data && Array.isArray(data)) {
+            data.forEach(item => {
+                if (item.hour >= 0 && item.hour < 24) {
+                    hourlyData[item.hour] = item.value;
+                }
+            });
+        }
+
+        currentChart.data.datasets[0].data = hourlyData;
+        currentChart.update();
+
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+    }
+}
+
+function setupWebSocket(userId, deviceId) {
+    if (currentWs) {
+        currentWs.close();
+    }
+
+    // Determine WS URL
+    // Use window.location to determine host and protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; // Includes port if present
+
+    // Construct URL: wss://localhost/ws/{userId}/{deviceId}
+    // This assumes Nginx is proxying /ws to the monitoring service
+    const wsUrl = `${protocol}//${host}/ws/${userId}/${deviceId}`;
+
+    console.log("Connecting to WS:", wsUrl);
+    currentWs = new WebSocket(wsUrl);
+
+    currentWs.onopen = () => {
+        console.log("WS Connected");
+    };
+
+    currentWs.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            // Expecting { device_id, user_id, timestamp, measurement_value }
+            if (data.measurement_value !== undefined) {
+                document.getElementById('rt-value').textContent = data.measurement_value;
+
+                // Optional: Update chart if looking at today
+                // This is a bit complex because we need to know if the update belongs to the current hour
+                // and if we are viewing today. For now, just RT value is enough as per request.
+            }
+        } catch (e) {
+            console.error("WS Message Error:", e);
+        }
+    };
+
+    currentWs.onclose = () => {
+        console.log("WS Closed");
+    };
+
+    currentWs.onerror = (err) => {
+        console.error("WS Error:", err);
+    };
+}
+
+// Hook into modal close to clean up WS
+document.querySelector('.close-button[data-modal="view-device-details-modal"]').addEventListener('click', () => {
+    if (currentWs) {
+        currentWs.close();
+        currentWs = null;
+    }
+});
 
 /**
  * ----------------------------------------------------------------
@@ -691,7 +871,7 @@ function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
         return JSON.parse(jsonPayload);
@@ -727,7 +907,7 @@ async function apiFetch(endpoint, options = {}, responseType = 'json') {
             ...options.headers,
         },
     };
-    
+
     // Don't set Content-Type for Basic Auth
     if (config.headers['Authorization'] && config.headers['Authorization'].startsWith('Basic')) {
         delete config.headers['Content-Type'];
@@ -744,17 +924,17 @@ async function apiFetch(endpoint, options = {}, responseType = 'json') {
         // No content or Created with no body
         return null;
     }
-    
+
     if (responseType === 'text') {
         return response.text();
     }
-    
+
     // Check if response has content before trying to parse JSON
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         return response.json();
     }
-    
+
     // If no JSON content-type, try to get text
     const text = await response.text();
     return text || null;

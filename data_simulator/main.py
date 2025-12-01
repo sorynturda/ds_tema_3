@@ -1,3 +1,5 @@
+#!.venv/bin/python
+
 import pika, pika.exceptions
 import json
 import time
@@ -99,11 +101,17 @@ class SimulatorApp:
     def generate_measurement(self, current_time):
         t_hour = current_time.hour + current_time.minute / 60.0
 
-        C_sin = AMPLITUDE * math.sin((2 * math.pi / 24) * (t_hour - PHASE_SHIFT))
-
-        noise = self.base_load * NOISE_PERCENTAGE * random.uniform(-1, 1)
-
-        C = self.base_load + C_sin + noise
+        # Logic: Reduced consumption between 22:00 and 06:00
+        if t_hour >= 22 or t_hour < 6:
+             # Low consumption: 10-20% of base load
+             C = random.uniform(0.1, 0.2) * self.base_load
+        else:
+             # Normal consumption (Daytime)
+             # Sine wave peaking at 14:00 (PHASE_SHIFT = 8)
+             # (t - 8) * (2pi/24) = pi/2 at t=14
+             C_sin = AMPLITUDE * math.sin((2 * math.pi / 24) * (t_hour - 8))
+             noise = self.base_load * NOISE_PERCENTAGE * random.uniform(-1, 1)
+             C = self.base_load + C_sin + noise
 
         C = max(0, C)
 

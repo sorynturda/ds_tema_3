@@ -18,22 +18,42 @@ public class ProducerService {
         this.rabbitTemplate = rabbitTemplate;
     }
 
-    public void createUser(PersonSyncDTO personSyncDTO) {
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.ROUTING_KEY_CREATED,
-                personSyncDTO
-        );
-        LOGGER.info("[x] Sent user with ID: {}", personSyncDTO.getId());
+    public boolean createUser(PersonSyncDTO personSyncDTO) {
+        try {
+            Object response = rabbitTemplate.convertSendAndReceive(
+                    RabbitMQConfig.EXCHANGE_NAME,
+                    RabbitMQConfig.ROUTING_KEY_CREATED,
+                    personSyncDTO,
+                    message -> {
+                        message.getMessageProperties().setExpiration("5000"); // 5 seconds TTL
+                        return message;
+                    }
+            );
+            LOGGER.info("[x] Sent user with ID: {}. Response: {}", personSyncDTO.getId(), response);
+            return response != null && "OK".equals(response.toString());
+        } catch (Exception e) {
+            LOGGER.error("RPC call for createUser failed", e);
+            return false;
+        }
     }
 
-    public void deleteUser(UUID id) {
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.ROUTING_KEY_DELETED,
-                id
-        );
-        LOGGER.info("[x] Sent ID: {}", id);
+    public boolean deleteUser(UUID id) {
+        try {
+            Object response = rabbitTemplate.convertSendAndReceive(
+                    RabbitMQConfig.EXCHANGE_NAME,
+                    RabbitMQConfig.ROUTING_KEY_DELETED,
+                    id,
+                    message -> {
+                        message.getMessageProperties().setExpiration("5000"); // 5 seconds TTL
+                        return message;
+                    }
+            );
+            LOGGER.info("[x] Sent ID: {}. Response: {}", id, response);
+            return response != null && "OK".equals(response.toString());
+        } catch (Exception e) {
+            LOGGER.error("RPC call for deleteUser failed", e);
+            return false;
+        }
     }
 
 }

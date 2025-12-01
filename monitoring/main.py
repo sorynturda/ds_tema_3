@@ -1,3 +1,7 @@
+import asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uvicorn
+from typing import List
 import pika
 import pika.exceptions
 import json
@@ -7,7 +11,7 @@ import uuid
 import time
 from dotenv import load_dotenv
 
-from db_module import init_db, write_raw_data
+from db_module import init_db, write_raw_data, get_daily_consumption
 
 load_dotenv()
 
@@ -28,6 +32,58 @@ CONN_PARAMS = pika.ConnectionParameters(
     port=5672,
     credentials=CREDENTIALS
 )
+
+app = FastAPI()
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, device_id: str):
+        await websocket.accept()
+        if device_id not in self.active_connections:
+            self.active_connections[device_id] = []
+        self.active_connections[device_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, device_id: str):
+        if device_id in self.active_connections:
+            if websocket in self.active_connections[device_id]:
+                self.active_connections[device_id].remove(websocket)
+            if not self.active_connections[device_id]:
+                del self.active_connections[device_id]
+
+    async def broadcast(self, message: str, device_id: str):
+        if device_id in self.active_connections:
+            for connection in self.active_connections[device_id][:]:
+                try:
+                    await connection.send_text(message)
+                except Exception as e:
+                    print(f"[WS] Error sending message to device {device_id}: {e}")
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/{user_id}/{device_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, device_id: str):
+    await manager.connect(websocket, device_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, device_id)
+    except Exception as e:
+        print(f"[WS] Error: {e}")
+        manager.disconnect(websocket, device_id)
+
+@app.get("/monitoring/history/{device_id}")
+async def get_history(device_id: str, date: str):
+    """
+    Returns hourly consumption for a given date.
+    date format: YYYY-MM-DD
+    """
+    print(f"[MAIN] Fetching history for device {device_id} on {date}")
+    data = get_daily_consumption(device_id, date)
+    print(f"[MAIN] Returning {len(data)} data points")
+    return data
 
 def connect_to_rabbitmq(retries=10, delay=5):
     """Attempts to connect to RabbitMQ with retries."""
@@ -95,27 +151,48 @@ class RpcClient:
 
 rpc_client = None
 
+hourly_consumption_store = {}
+
+def get_hourly_consumption(device_id, timestamp_str, current_value):
+    try:
+        dt_part = timestamp_str.split(':')[0] # "YYYY-MM-DD HH"
+        
+        if device_id not in hourly_consumption_store:
+            hourly_consumption_store[device_id] = {}
+        
+        if dt_part not in hourly_consumption_store[device_id]:
+             hourly_consumption_store[device_id][dt_part] = 0.0
+             
+        hourly_consumption_store[device_id][dt_part] += current_value
+        
+        return hourly_consumption_store[device_id][dt_part]
+    except Exception as e:
+        print(f"[MAIN] Error calculating hourly consumption: {e}")
+        return current_value
+
 def process_measurement(data):
     """
-    Extracts data, validates mapping via RPC, and calls the database module to persist the record.
+    Extracts data, validates mapping via RPC, saves to DB, and broadcasts.
     """
-    global rpc_client
     try:
         device_id = data['device_id']
         user_id = data['user_id']
         timestamp_str = data['timestamp']
         consumption = float(data['measurement_value'])
 
-        if rpc_client is None:
-             rpc_client = RpcClient()
-
-        is_valid = rpc_client.call(device_id, user_id)
-
-        if is_valid:
-            write_raw_data(device_id, user_id, timestamp_str, consumption)
-            print(f"[MAIN] Processed: Device {device_id} | Time {timestamp_str}")
+        if rpc_client:
+            is_valid = rpc_client.call(device_id, user_id)
+            if not is_valid:
+                print(f"[MAIN] Validation FAILED for Device {device_id} and User {user_id}. Dropping data.")
+                return
         else:
-            print(f"[MAIN] Data Dumped: Invalid Mapping for Device {device_id} and User {user_id}")
+            print("[MAIN] RPC Client not initialized. Skipping validation (Risky).")
+
+        write_raw_data(device_id, user_id, timestamp_str, consumption)
+        print(f"[MAIN] Saved to DB: Device {device_id} | Time {timestamp_str}")
+        
+        message = json.dumps(data)
+        asyncio.run_coroutine_threadsafe(manager.broadcast(message, device_id), loop)
 
     except Exception as e:
         print(f"[MAIN] ERROR processing/writing data: {e} | Raw Data: {data}")
@@ -165,6 +242,16 @@ def start_data_consumer():
         print(f"[!!!] Unhandled error in data consumer: {e}")
 
 
+@app.on_event("startup")
+async def startup_event():
+    global loop
+    loop = asyncio.get_running_loop()
+    
+    consumer_thread = threading.Thread(target=start_data_consumer)
+    consumer_thread.daemon = True
+    consumer_thread.start()
+    print("[INFO] RabbitMQ Consumer thread started.")
+
 def main():
     init_db()
     
@@ -175,13 +262,7 @@ def main():
     except Exception as e:
          print(f"[WARN] Failed to initialize RPC Client: {e}. Will retry in loop.")
 
-    try:
-        start_data_consumer()
-    except KeyboardInterrupt:
-        print("[INFO] Monitoring Microservice Shutdown Complete.")
-    except Exception as e:
-        print(f"[FATAL] Monitoring Microservice crashed: {e}")
-
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == '__main__':
     main()

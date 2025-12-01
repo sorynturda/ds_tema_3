@@ -151,8 +151,19 @@ public class DeviceService {
 
     public boolean checkMapping(UUID deviceId, UUID userId) {
         try {
+            LOGGER.info("Checking mapping for Device {} and User {}", deviceId, userId);
             UserDeviceMapping mapping = mappingRepository.findByDevice(deviceId);
-            return mapping != null && mapping.getUserId().equals(userId);
+            
+            if (mapping == null) {
+                LOGGER.warn("Mapping not found for Device {}", deviceId);
+                return false;
+            }
+            
+            boolean match = mapping.getUserId().equals(userId);
+            if (!match) {
+                LOGGER.warn("Mapping found but User ID mismatch. Expected {}, Found {}", userId, mapping.getUserId());
+            }
+            return match;
         } catch (Exception e) {
             LOGGER.error("Error checking mapping for device {} and user {}: {}", deviceId, userId, e.getMessage());
             return false;

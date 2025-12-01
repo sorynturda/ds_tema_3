@@ -17,12 +17,22 @@ public class ConsumerConfig {
     PersonService personService;
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_CREATE)
-    public void handleUserCreation(PersonDetailsDTO person) {
-        personService.insert(person);
+    public String handleUserCreation(PersonDetailsDTO person) {
+        try {
+            personService.insert(person);
+            return "OK";
+        } catch (Exception e) {
+            return "ERROR";
+        }
     }
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_DELETE)
-    public void handleUserDeleted(UUID id) {
-        personService.delete(id);
+    public String handleUserDeleted(UUID id) {
+        try {
+            personService.delete(id);
+            return "OK";
+        } catch (Exception e) {
+            return "ERROR";
+        }
     }
 }
