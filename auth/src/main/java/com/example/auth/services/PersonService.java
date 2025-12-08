@@ -12,8 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronizationAdapter;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
@@ -40,20 +38,16 @@ public class PersonService {
     public UUID insert(RegisterDTO user) {
         UUID newUserId = UUID.randomUUID();
         
-        // 1. Create Sync DTO
-        PersonSyncDTO userSyncRequest = new PersonSyncDTO(newUserId, user.getName(), user.getAddress(), user.getAge());
-
-        // 2. RPC Call to User Service - MUST succeed to proceed
-        boolean rpcSuccess = producerService.createUser(userSyncRequest);
-        if (!rpcSuccess) {
-            LOGGER.error("User Service rejected creation for ID {}. Aborting registration.", newUserId);
-            throw new RuntimeException("Registration failed: User Service is unavailable or rejected the request.");
-        }
-
-        // 3. Save to Local DB (only if RPC succeeded)
+        // 1. Save to Local DB
         Person person = personRepository.save(
                 new Person(newUserId, user.getUsername(), passwordEncoder.encode(user.getPassword()), false));
         LOGGER.debug("Person with id {} was inserted in db", person.getId());
+
+        // 2. Create Sync DTO
+        PersonSyncDTO userSyncRequest = new PersonSyncDTO(newUserId, user.getName(), user.getAddress(), user.getAge());
+
+        // 3. Publish Event (Fire and Forget)
+        producerService.createUser(userSyncRequest);
 
         return person.getId();
     }
@@ -76,15 +70,11 @@ public class PersonService {
 
     @Transactional
     public void deletePerson(UUID uuid) {
-        // 1. RPC Call to User Service - MUST succeed to proceed
-        boolean rpcSuccess = producerService.deleteUser(uuid);
-        if (!rpcSuccess) {
-            LOGGER.error("User Service rejected deletion for ID {}. Aborting deletion.", uuid);
-            throw new RuntimeException("Deletion failed: User Service is unavailable or rejected the request.");
-        }
-        
-        // 2. Delete from Local DB
+        // 1. Delete from Local DB
         personRepository.delete(personRepository.findById(uuid).get());
         LOGGER.debug("Person with id {} deleted successfully!", uuid);
+        
+        // 2. Publish Event (Fire and Forget)
+        producerService.deleteUser(uuid);
     }
 }

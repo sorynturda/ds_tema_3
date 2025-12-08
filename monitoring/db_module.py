@@ -23,13 +23,13 @@ def get_db_connection():
 
 
 def init_db():
-    """Initializes the raw_measurements table."""
+    """Initializes the raw_measurements, devices, and device_mappings tables."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        create_table_query = """
+        create_measurements_table = """
         CREATE TABLE IF NOT EXISTS raw_measurements (
             id SERIAL PRIMARY KEY,
             device_id UUID NOT NULL,
@@ -38,10 +38,28 @@ def init_db():
             consumption_kwh NUMERIC(10, 5) NOT NULL
         );
         """
-        cursor.execute(create_table_query)
+        cursor.execute(create_measurements_table)
+
+        create_devices_table = """
+        CREATE TABLE IF NOT EXISTS devices (
+            id UUID PRIMARY KEY,
+            manufacturer VARCHAR(255),
+            name VARCHAR(255),
+            consumption NUMERIC(10, 5)
+        );
+        """
+        cursor.execute(create_devices_table)
+
+        create_mappings_table = """
+        CREATE TABLE IF NOT EXISTS device_mappings (
+            device_id UUID PRIMARY KEY,
+            user_id UUID NOT NULL
+        );
+        """
+        cursor.execute(create_mappings_table)
 
         conn.commit()
-        print("[DB_Module] Database initialized successfully (raw_measurements).")
+        print("[DB_Module] Database initialized successfully (raw_measurements, devices, device_mappings).")
 
     except Exception as e:
         print(f"[DB_Module] ERROR: Could not connect or initialize database: {e}")
@@ -70,6 +88,97 @@ def write_raw_data(device_id, user_id, timestamp_str, consumption):
     except Exception as e:
         print(f"[DB_Module] CRITICAL ERROR during DB write: {e}")
         raise e
+    finally:
+        if conn:
+            conn.close()
+
+def insert_device(device_id, manufacturer, name, consumption):
+    """Inserts or updates a device record."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        insert_query = """
+        INSERT INTO devices (id, manufacturer, name, consumption)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE 
+        SET manufacturer = EXCLUDED.manufacturer,
+            name = EXCLUDED.name,
+            consumption = EXCLUDED.consumption;
+        """
+
+        cursor.execute(insert_query, (device_id, manufacturer, name, consumption))
+        conn.commit()
+        print(f"[DB_Module] Device {device_id} saved/updated.")
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR inserting device: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def insert_mapping(device_id, user_id):
+    """Inserts or updates a device-user mapping."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        insert_query = """
+        INSERT INTO device_mappings (device_id, user_id)
+        VALUES (%s, %s)
+        ON CONFLICT (device_id) DO UPDATE 
+        SET user_id = EXCLUDED.user_id;
+        """
+
+        cursor.execute(insert_query, (device_id, user_id))
+        conn.commit()
+        print(f"[DB_Module] Mapping saved: Device {device_id} -> User {user_id}")
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR inserting mapping: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def delete_mapping(device_id):
+    """Deletes a device-user mapping."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        delete_query = "DELETE FROM device_mappings WHERE device_id = %s;"
+        cursor.execute(delete_query, (device_id,))
+        conn.commit()
+        print(f"[DB_Module] Mapping deleted for Device {device_id}")
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR deleting mapping: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def check_mapping(device_id, user_id):
+    """Checks if a device is mapped to the given user."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT 1 FROM device_mappings WHERE device_id = %s AND user_id = %s;"
+        cursor.execute(query, (device_id, user_id))
+        result = cursor.fetchone()
+        
+        return result is not None
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR checking mapping: {e}")
+        return False
     finally:
         if conn:
             conn.close()

@@ -18,42 +18,29 @@ public class ProducerService {
         this.rabbitTemplate = rabbitTemplate;
     }
 
-    public boolean createUser(PersonSyncDTO personSyncDTO) {
+    public void createUser(PersonSyncDTO personSyncDTO) {
         try {
-            Object response = rabbitTemplate.convertSendAndReceive(
-                    RabbitMQConfig.EXCHANGE_NAME,
-                    RabbitMQConfig.ROUTING_KEY_CREATED,
-                    personSyncDTO,
-                    message -> {
-                        message.getMessageProperties().setExpiration("5000"); // 5 seconds TTL
-                        return message;
-                    }
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.USER_EXCHANGE,
+                    "user.created",
+                    personSyncDTO
             );
-            LOGGER.info("[x] Sent user with ID: {}. Response: {}", personSyncDTO.getId(), response);
-            return response != null && "OK".equals(response.toString());
+            LOGGER.info("[x] Sent user creation event for ID: {}", personSyncDTO.getId());
         } catch (Exception e) {
-            LOGGER.error("RPC call for createUser failed", e);
-            return false;
+            LOGGER.error("Failed to send user creation event", e);
         }
     }
 
-    public boolean deleteUser(UUID id) {
+    public void deleteUser(UUID id) {
         try {
-            Object response = rabbitTemplate.convertSendAndReceive(
-                    RabbitMQConfig.EXCHANGE_NAME,
-                    RabbitMQConfig.ROUTING_KEY_DELETED,
-                    id,
-                    message -> {
-                        message.getMessageProperties().setExpiration("5000"); // 5 seconds TTL
-                        return message;
-                    }
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.USER_EXCHANGE,
+                    "user.deleted",
+                    id
             );
-            LOGGER.info("[x] Sent ID: {}. Response: {}", id, response);
-            return response != null && "OK".equals(response.toString());
+            LOGGER.info("[x] Sent user deletion event for ID: {}", id);
         } catch (Exception e) {
-            LOGGER.error("RPC call for deleteUser failed", e);
-            return false;
+            LOGGER.error("Failed to send user deletion event", e);
         }
     }
-
 }

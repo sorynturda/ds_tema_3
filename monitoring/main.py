@@ -11,7 +11,7 @@ import uuid
 import time
 from dotenv import load_dotenv
 
-from db_module import init_db, write_raw_data, get_daily_consumption
+from db_module import init_db, write_raw_data, get_daily_consumption, insert_device, insert_mapping, delete_mapping, check_mapping
 
 load_dotenv()
 
@@ -23,8 +23,11 @@ DATA_EXCHANGE = 'data_collection_exchange'
 MONITORING_QUEUE = 'monitoring_data_queue'
 DATA_ROUTING_KEY = 'device.measurement'
 
-VALIDATION_EXCHANGE = 'validate_exchange'
-VALIDATION_ROUTING_KEY = 'validate_key'
+DEVICE_EXCHANGE = 'device-exchange'
+DEVICE_QUEUE = 'device.queue.monitoring-service'
+DEVICE_ROUTING_KEY_CREATED = 'device.created'
+DEVICE_ROUTING_KEY_ASSIGNED = 'device.assigned'
+DEVICE_ROUTING_KEY_UNASSIGNED = 'device.unassigned'
 
 CREDENTIALS = pika.credentials.PlainCredentials(username=RABBITMQ_USER, password=RABBITMQ_PASS)
 CONN_PARAMS = pika.ConnectionParameters(
@@ -97,60 +100,6 @@ def connect_to_rabbitmq(retries=10, delay=5):
     raise pika.exceptions.AMQPConnectionError(f"Failed to connect to RabbitMQ after {retries} attempts")
 
 
-class RpcClient:
-    def __init__(self):
-        self.connection = connect_to_rabbitmq()
-        self.channel = self.connection.channel()
-
-        result = self.channel.queue_declare(queue='', exclusive=True)
-        self.callback_queue = result.method.queue
-
-        self.channel.basic_consume(
-            queue=self.callback_queue,
-            on_message_callback=self.on_response,
-            auto_ack=True
-        )
-
-        self.response = None
-        self.corr_id = None
-
-    def on_response(self, ch, method, props, body):
-        if self.corr_id == props.correlation_id:
-            self.response = body
-
-    def call(self, device_id, user_id):
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        
-        message = json.dumps({"device_id": device_id, "user_id": user_id})
-
-        self.channel.basic_publish(
-            exchange=VALIDATION_EXCHANGE,
-            routing_key=VALIDATION_ROUTING_KEY,
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=self.corr_id,
-                content_type='application/json',
-                priority=0
-            ),
-            body=message
-        )
-        
-        start_time = time.time()
-        while self.response is None:
-            self.connection.process_data_events()
-            if time.time() - start_time > 5:
-                print("[RPC] Timeout waiting for validation response")
-                return False
-
-        try:
-            return self.response.decode('utf-8').lower() == 'true'
-        except:
-            return False
-
-
-rpc_client = None
-
 hourly_consumption_store = {}
 
 def get_hourly_consumption(device_id, timestamp_str, current_value):
@@ -172,7 +121,7 @@ def get_hourly_consumption(device_id, timestamp_str, current_value):
 
 def process_measurement(data):
     """
-    Extracts data, validates mapping via RPC, saves to DB, and broadcasts.
+    Extracts data, validates mapping via local DB, saves to DB, and broadcasts.
     """
     try:
         device_id = data['device_id']
@@ -180,13 +129,11 @@ def process_measurement(data):
         timestamp_str = data['timestamp']
         consumption = float(data['measurement_value'])
 
-        if rpc_client:
-            is_valid = rpc_client.call(device_id, user_id)
-            if not is_valid:
-                print(f"[MAIN] Validation FAILED for Device {device_id} and User {user_id}. Dropping data.")
-                return
-        else:
-            print("[MAIN] RPC Client not initialized. Skipping validation (Risky).")
+        # Local Validation
+        is_valid = check_mapping(device_id, user_id)
+        if not is_valid:
+            print(f"[MAIN] Validation FAILED for Device {device_id} and User {user_id}. Device not mapped to user. Dropping data.")
+            return
 
         write_raw_data(device_id, user_id, timestamp_str, consumption)
         print(f"[MAIN] Saved to DB: Device {device_id} | Time {timestamp_str}")
@@ -210,27 +157,80 @@ def data_callback(ch, method, properties, body):
         print(f"[MAIN] Unhandled error in data callback: {e}. ACK'ing for now.")
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
+def device_callback(ch, method, properties, body):
+    try:
+        data = json.loads(body.decode('utf-8'))
+        routing_key = method.routing_key
+        print(f"[MAIN] Received device event: {routing_key} | Data: {data}")
+        
+        if routing_key == DEVICE_ROUTING_KEY_CREATED:
+            device_id = data.get('id')
+            manufacturer = data.get('manufacturer')
+            name = data.get('name')
+            consumption = data.get('consumption')
+            if device_id:
+                insert_device(device_id, manufacturer, name, consumption)
+                print(f"[MAIN] Device {device_id} created/updated.")
+
+        elif routing_key == DEVICE_ROUTING_KEY_ASSIGNED:
+            device_id = data.get('deviceId')
+            user_id = data.get('userId')
+            if device_id and user_id:
+                insert_mapping(device_id, user_id)
+                print(f"[MAIN] Device {device_id} assigned to User {user_id}.")
+
+        elif routing_key == DEVICE_ROUTING_KEY_UNASSIGNED:
+            # The body might be just the UUID string or a JSON with ID, depending on publisher.
+            # Publisher sends just the UUID (as JSON string or plain? Jackson converts UUID to string usually).
+            # Let's handle both object or simple string/value.
+            device_id = data # Assuming it's deserialized to the UUID string directly if it was just a value
+            # If it's a dict (unlikely for just UUID body but possible if wrapped), extract.
+            if isinstance(data, dict):
+                 device_id = data.get('id') or data.get('deviceId')
+            
+            if device_id:
+                delete_mapping(device_id)
+                print(f"[MAIN] Device {device_id} unassigned.")
+
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        print(f"[MAIN] Error processing device event: {e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 def start_data_consumer():
     try:
         connection = connect_to_rabbitmq()
         channel = connection.channel()
 
+        # Data Queue
         channel.exchange_declare(exchange=DATA_EXCHANGE, exchange_type='direct', durable=True)
         channel.queue_declare(queue=MONITORING_QUEUE, durable=True)
-
         channel.queue_bind(
             exchange=DATA_EXCHANGE,
             queue=MONITORING_QUEUE,
             routing_key=DATA_ROUTING_KEY
         )
 
-        print(f"[*] Waiting for data messages on {MONITORING_QUEUE}. To exit press CTRL+C")
+        # Device Queue
+        channel.exchange_declare(exchange=DEVICE_EXCHANGE, exchange_type='topic', durable=True)
+        channel.queue_declare(queue=DEVICE_QUEUE, durable=True)
+        
+        # Bind for all device events
+        channel.queue_bind(exchange=DEVICE_EXCHANGE, queue=DEVICE_QUEUE, routing_key='device.#')
+
+        print(f"[*] Waiting for messages on {MONITORING_QUEUE} and {DEVICE_QUEUE}. To exit press CTRL+C")
 
         channel.basic_consume(
             queue=MONITORING_QUEUE,
             on_message_callback=data_callback
         )
+        
+        channel.basic_consume(
+            queue=DEVICE_QUEUE,
+            on_message_callback=device_callback
+        )
+
         channel.start_consuming()
 
     except pika.exceptions.AMQPConnectionError:
@@ -254,14 +254,7 @@ async def startup_event():
 
 def main():
     init_db()
-    
-    global rpc_client
-    try:
-        rpc_client = RpcClient()
-        print("[INFO] RPC Client initialized.")
-    except Exception as e:
-         print(f"[WARN] Failed to initialize RPC Client: {e}. Will retry in loop.")
-
+    # RPC Client initialization removed
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == '__main__':

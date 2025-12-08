@@ -3,6 +3,7 @@ package com.example.demo.services;
 
 import com.example.demo.dtos.DeviceDTO;
 import com.example.demo.dtos.DeviceDetailsDTO;
+import com.example.demo.dtos.DeviceSyncDTO;
 import com.example.demo.dtos.builders.DeviceBuilder;
 import com.example.demo.entities.Device;
 import com.example.demo.entities.UserDeviceMapping;
@@ -28,11 +29,13 @@ public class DeviceService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceService.class);
     private final DeviceRepository deviceRepository;
     private final UserDeviceMappingRepository mappingRepository;
+    private final DevicePublisher devicePublisher;
 
     @Autowired
-    public DeviceService(DeviceRepository deviceRepository, UserDeviceMappingRepository mappingRepository) {
+    public DeviceService(DeviceRepository deviceRepository, UserDeviceMappingRepository mappingRepository, DevicePublisher devicePublisher) {
         this.deviceRepository = deviceRepository;
         this.mappingRepository = mappingRepository;
+        this.devicePublisher = devicePublisher;
     }
 
     @Transactional
@@ -56,6 +59,16 @@ public class DeviceService {
         Device device = DeviceBuilder.toEntity(deviceDTO);
         device = deviceRepository.save(device);
         LOGGER.debug("Device with id {} was inserted in db", device.getId());
+
+        // Publish Device Creation Event
+        DeviceSyncDTO deviceSyncDTO = new DeviceSyncDTO(
+                device.getId(),
+                device.getManufacturer(),
+                device.getName(), // Using name as model/name
+                device.getConsumption()
+        );
+        devicePublisher.createDevice(deviceSyncDTO);
+
         return device.getId();
     }
 
@@ -94,6 +107,9 @@ public class DeviceService {
             deviceRepository.deleteById(id);
             LOGGER.debug("Device with id {} was deleted from db", id);
 
+            // Publish Unassignment Event (Implicitly unassigned on delete)
+            devicePublisher.unassignDevice(id);
+
             return true;
         } else {
             LOGGER.debug("Device with id {} was not found in db", id);
@@ -113,6 +129,10 @@ public class DeviceService {
         try {
             mappingRepository.save(newMapping);
             LOGGER.debug("Assigned device {} to user {}", deviceId, userId);
+            
+            // Publish Assignment Event
+            devicePublisher.assignDevice(new com.example.demo.dtos.DeviceMappingDTO(deviceId, userId));
+            
         } catch (DataIntegrityViolationException e) {
             LOGGER.warn("Device {} is already assigned to user {}", deviceId, userId);
             throw new RuntimeException("Device is already assigned to this user");
@@ -129,6 +149,9 @@ public class DeviceService {
 
         mappingRepository.delete(mapping);
         LOGGER.debug("Unassigned device {} from user {}", deviceId, userId);
+        
+        // Publish Unassignment Event
+        devicePublisher.unassignDevice(deviceId);
     }
 
     @Transactional
