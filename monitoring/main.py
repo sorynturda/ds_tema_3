@@ -11,7 +11,7 @@ import uuid
 import time
 from dotenv import load_dotenv
 
-from db_module import init_db, write_raw_data, get_daily_consumption, insert_device, insert_mapping, delete_mapping, check_mapping
+from db_module import init_db, write_raw_data, get_daily_consumption, insert_device, insert_mapping, delete_mapping, check_mapping, delete_device
 
 load_dotenv()
 
@@ -28,6 +28,7 @@ DEVICE_QUEUE = 'device.queue.monitoring-service'
 DEVICE_ROUTING_KEY_CREATED = 'device.created'
 DEVICE_ROUTING_KEY_ASSIGNED = 'device.assigned'
 DEVICE_ROUTING_KEY_UNASSIGNED = 'device.unassigned'
+DEVICE_ROUTING_KEY_DELETED = 'device.deleted'
 
 CREDENTIALS = pika.credentials.PlainCredentials(username=RABBITMQ_USER, password=RABBITMQ_PASS)
 CONN_PARAMS = pika.ConnectionParameters(
@@ -165,11 +166,8 @@ def device_callback(ch, method, properties, body):
         
         if routing_key == DEVICE_ROUTING_KEY_CREATED:
             device_id = data.get('id')
-            manufacturer = data.get('manufacturer')
-            name = data.get('name')
-            consumption = data.get('consumption')
             if device_id:
-                insert_device(device_id, manufacturer, name, consumption)
+                insert_device(device_id)
                 print(f"[MAIN] Device {device_id} created/updated.")
 
         elif routing_key == DEVICE_ROUTING_KEY_ASSIGNED:
@@ -191,6 +189,15 @@ def device_callback(ch, method, properties, body):
             if device_id:
                 delete_mapping(device_id)
                 print(f"[MAIN] Device {device_id} unassigned.")
+
+        elif routing_key == DEVICE_ROUTING_KEY_DELETED:
+            device_id = data
+            if isinstance(data, dict):
+                 device_id = data.get('id') or data.get('deviceId')
+            
+            if device_id:
+                delete_device(device_id)
+                print(f"[MAIN] Device {device_id} deleted.")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:

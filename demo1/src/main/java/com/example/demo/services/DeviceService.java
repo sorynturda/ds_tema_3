@@ -109,6 +109,7 @@ public class DeviceService {
 
             // Publish Unassignment Event (Implicitly unassigned on delete)
             devicePublisher.unassignDevice(id);
+            devicePublisher.publishDeviceDeleted(id);
 
             return true;
         } else {

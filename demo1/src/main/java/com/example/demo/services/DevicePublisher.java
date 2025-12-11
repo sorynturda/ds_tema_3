@@ -58,4 +58,17 @@ public class DevicePublisher {
             LOGGER.error("Failed to send device unassignment event", e);
         }
     }
+
+    public void publishDeviceDeleted(UUID deviceId) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.DEVICE_EXCHANGE,
+                    "device.deleted",
+                    deviceId
+            );
+            LOGGER.info("[x] Sent device deletion event for Device {}", deviceId);
+        } catch (Exception e) {
+            LOGGER.error("Failed to send device deletion event", e);
+        }
+    }
 }

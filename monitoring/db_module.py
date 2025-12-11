@@ -42,10 +42,7 @@ def init_db():
 
         create_devices_table = """
         CREATE TABLE IF NOT EXISTS devices (
-            id UUID PRIMARY KEY,
-            manufacturer VARCHAR(255),
-            name VARCHAR(255),
-            consumption NUMERIC(10, 5)
+            id UUID PRIMARY KEY
         );
         """
         cursor.execute(create_devices_table)
@@ -92,7 +89,7 @@ def write_raw_data(device_id, user_id, timestamp_str, consumption):
         if conn:
             conn.close()
 
-def insert_device(device_id, manufacturer, name, consumption):
+def insert_device(device_id):
     """Inserts or updates a device record."""
     conn = None
     try:
@@ -100,17 +97,14 @@ def insert_device(device_id, manufacturer, name, consumption):
         cursor = conn.cursor()
 
         insert_query = """
-        INSERT INTO devices (id, manufacturer, name, consumption)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (id) DO UPDATE 
-        SET manufacturer = EXCLUDED.manufacturer,
-            name = EXCLUDED.name,
-            consumption = EXCLUDED.consumption;
+        INSERT INTO devices (id)
+        VALUES (%s)
+        ON CONFLICT (id) DO NOTHING;
         """
 
-        cursor.execute(insert_query, (device_id, manufacturer, name, consumption))
+        cursor.execute(insert_query, (device_id,))
         conn.commit()
-        print(f"[DB_Module] Device {device_id} saved/updated.")
+        print(f"[DB_Module] Device {device_id} saved.")
 
     except Exception as e:
         print(f"[DB_Module] ERROR inserting device: {e}")
@@ -158,6 +152,25 @@ def delete_mapping(device_id):
 
     except Exception as e:
         print(f"[DB_Module] ERROR deleting mapping: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def delete_device(device_id):
+    """Deletes a device record."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        delete_query = "DELETE FROM devices WHERE id = %s;"
+        cursor.execute(delete_query, (device_id,))
+        conn.commit()
+        print(f"[DB_Module] Device {device_id} deleted.")
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR deleting device: {e}")
         raise e
     finally:
         if conn:
