@@ -831,9 +831,26 @@ function setupWebSocket(userId, deviceId) {
             if (data.measurement_value !== undefined) {
                 document.getElementById('rt-value').textContent = data.measurement_value;
 
-                // Optional: Update chart if looking at today
-                // This is a bit complex because we need to know if the update belongs to the current hour
-                // and if we are viewing today. For now, just RT value is enough as per request.
+                // Update chart if looking at today
+                if (currentChart) {
+                    const selectedDate = document.getElementById('history-date').value;
+                    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+
+                    if (selectedDate === today) {
+                        const timestamp = new Date(data.timestamp);
+                        const hour = timestamp.getHours();
+
+                        if (hour >= 0 && hour < 24) {
+                            // Add the measurement value to the current hour's total
+                            // Note: The chart data is cumulative for the hour in the backend (SUM),
+                            // and the WS sends the increment (measurement_value).
+                            // So we add it to the existing value in the chart.
+                            const currentVal = currentChart.data.datasets[0].data[hour] || 0;
+                            currentChart.data.datasets[0].data[hour] = currentVal + data.measurement_value;
+                            currentChart.update();
+                        }
+                    }
+                }
             }
         } catch (e) {
             console.error("WS Message Error:", e);
