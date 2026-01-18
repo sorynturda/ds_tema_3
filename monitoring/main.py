@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 import uvicorn
 from typing import List
 import pika
@@ -19,12 +19,22 @@ RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS')
 
-DATA_EXCHANGE = 'data_collection_exchange'
-MONITORING_QUEUE = 'monitoring_data_queue'
-DATA_ROUTING_KEY = 'device.measurement'
+# Incoming Data Config
+# If REPLICA_ID is set, we consume from LB's exchange using a specific routing key.
+REPLICA_ID = os.getenv('REPLICA_ID') 
+
+if REPLICA_ID:
+    DATA_EXCHANGE = 'monitoring_exchange' # Exchange where LB publishes
+    MONITORING_QUEUE = f'monitoring_queue_{REPLICA_ID}'
+    DATA_ROUTING_KEY = f'replica.{REPLICA_ID}'
+else:
+    # Fallback / Legacy mode (Direct from device)
+    DATA_EXCHANGE = 'data_collection_exchange'
+    MONITORING_QUEUE = 'monitoring_data_queue'
+    DATA_ROUTING_KEY = 'device.measurement'
 
 DEVICE_EXCHANGE = 'device-exchange'
-DEVICE_QUEUE = 'device.queue.monitoring-service'
+DEVICE_QUEUE = f'device.queue.monitoring-service.{REPLICA_ID}' if REPLICA_ID else 'device.queue.monitoring-service'
 DEVICE_ROUTING_KEY_CREATED = 'device.created'
 DEVICE_ROUTING_KEY_ASSIGNED = 'device.assigned'
 DEVICE_ROUTING_KEY_UNASSIGNED = 'device.unassigned'
@@ -39,44 +49,7 @@ CONN_PARAMS = pika.ConnectionParameters(
 
 app = FastAPI()
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, device_id: str):
-        await websocket.accept()
-        if device_id not in self.active_connections:
-            self.active_connections[device_id] = []
-        self.active_connections[device_id].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, device_id: str):
-        if device_id in self.active_connections:
-            if websocket in self.active_connections[device_id]:
-                self.active_connections[device_id].remove(websocket)
-            if not self.active_connections[device_id]:
-                del self.active_connections[device_id]
-
-    async def broadcast(self, message: str, device_id: str):
-        if device_id in self.active_connections:
-            for connection in self.active_connections[device_id][:]:
-                try:
-                    await connection.send_text(message)
-                except Exception as e:
-                    print(f"[WS] Error sending message to device {device_id}: {e}")
-
-manager = ConnectionManager()
-
-@app.websocket("/ws/{user_id}/{device_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str, device_id: str):
-    await manager.connect(websocket, device_id)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, device_id)
-    except Exception as e:
-        print(f"[WS] Error: {e}")
-        manager.disconnect(websocket, device_id)
 
 @app.get("/monitoring/history/{device_id}")
 async def get_history(device_id: str, date: str):
@@ -120,7 +93,7 @@ def get_hourly_consumption(device_id, timestamp_str, current_value):
         print(f"[MAIN] Error calculating hourly consumption: {e}")
         return current_value
 
-def process_measurement(data):
+def process_measurement(data, ch=None):
     """
     Extracts data, validates mapping via local DB, saves to DB, and broadcasts.
     """
@@ -140,7 +113,19 @@ def process_measurement(data):
         print(f"[MAIN] Saved to DB: Device {device_id} | Time {timestamp_str}")
         
         message = json.dumps(data)
-        asyncio.run_coroutine_threadsafe(manager.broadcast(message, device_id), loop)
+        
+        # Use provided channel or fallback to global (unsafe)
+        publish_channel = ch if ch else (channel if 'channel' in globals() else None)
+        
+        if publish_channel:
+             publish_channel.basic_publish(
+                exchange='broadcast_exchange',
+                routing_key='',
+                body=message
+             )
+             print(f"[MAIN] Published update to broadcast_exchange")
+        else:
+             print("[MAIN] Warning: Channel not available for broadcast")
 
     except Exception as e:
         print(f"[MAIN] ERROR processing/writing data: {e} | Raw Data: {data}")
@@ -149,7 +134,7 @@ def process_measurement(data):
 def data_callback(ch, method, properties, body):
     try:
         data = json.loads(body.decode('utf-8'))
-        process_measurement(data)
+        process_measurement(data, ch)
         ch.basic_ack(delivery_tag=method.delivery_tag)
     except json.JSONDecodeError:
         print(f"[MAIN] Failed to decode JSON: {body}")
@@ -208,6 +193,8 @@ def device_callback(ch, method, properties, body):
 def start_data_consumer():
     try:
         connection = connect_to_rabbitmq()
+        connection = connect_to_rabbitmq()
+        global channel
         channel = connection.channel()
 
         # Data Queue
@@ -225,6 +212,9 @@ def start_data_consumer():
         
         # Bind for all device events
         channel.queue_bind(exchange=DEVICE_EXCHANGE, queue=DEVICE_QUEUE, routing_key='device.#')
+
+        # Broadcast Exchange (for WS service)
+        channel.exchange_declare(exchange='broadcast_exchange', exchange_type='fanout', durable=True)
 
         print(f"[*] Waiting for messages on {MONITORING_QUEUE} and {DEVICE_QUEUE}. To exit press CTRL+C")
 

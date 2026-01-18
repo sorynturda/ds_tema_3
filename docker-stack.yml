@@ -1,0 +1,255 @@
+version: '3.8'
+
+services:
+  rp:
+    image: ds-rp:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ./nginx/config:/etc/nginx:ro
+      - ./frontend:/var/www/html
+    ports:
+      - "443:443"
+    networks:
+      - app_net
+    depends_on:
+      - auth-service
+      - user-service
+      - device-service
+      - monitoring-service-1
+      - monitoring-service-2
+      - monitoring-service-3
+      - websocket-service
+
+  auth-service:
+    image: ds-auth-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ./auth:/app
+      - maven_repo:/root/.m2
+    ports:
+      - "4000:8080"
+    networks:
+      - app_net
+    depends_on:
+      - rabbit
+
+  user-service:
+    image: ds-user-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ./demo:/app
+      - maven_repo:/root/.m2
+    ports:
+      - "2000:8080"
+    networks:
+      - app_net
+    depends_on:
+      - user_db
+      - rabbit
+
+  device-service:
+    image: ds-device-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ./demo1:/app
+      - maven_repo:/root/.m2
+    ports:
+      - "3000:8080"
+    networks:
+      - app_net
+    depends_on:
+      - device_db
+
+  load-balancer-service:
+    image: ds-load-balancer:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      MONITORING_REPLICAS: 3
+    networks:
+      - app_net
+    depends_on:
+      - rabbit
+
+  monitoring-service-1:
+    image: ds-monitoring-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      REPLICA_ID: 0
+    networks:
+      - app_net
+    depends_on:
+      - monitoring_db
+      - rabbit
+
+  monitoring-service-2:
+    image: ds-monitoring-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      REPLICA_ID: 1
+    networks:
+      - app_net
+    depends_on:
+      - monitoring_db
+      - rabbit
+
+  monitoring-service-3:
+    image: ds-monitoring-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      REPLICA_ID: 2
+    networks:
+      - app_net
+    depends_on:
+      - monitoring_db
+      - rabbit
+
+  websocket-service:
+    image: ds-websocket-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - app_net
+    depends_on:
+      - rabbit
+
+  chat-service:
+    image: ds-chat-service:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - app_net
+    depends_on:
+      - rabbit
+      - websocket-service
+
+  rabbit:
+    image: rabbitmq:management-alpine
+    hostname: rabbit
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: kalo
+      RABBITMQ_DEFAULT_PASS: kalo
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+    networks:
+      - app_net
+
+  user_db:
+    image: postgres:15-alpine
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - user_data:/var/lib/postgresql/data
+    ports:
+      - "1000:5432"
+    networks:
+      - app_net
+
+  device_db:
+    image: postgres:15-alpine
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - device_data:/var/lib/postgresql/data
+    ports:
+      - "1001:5432"
+    networks:
+      - app_net
+
+  credential_db:
+    image: postgres:15-alpine
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - credential_data:/var/lib/postgresql/data
+    ports:
+      - "1002:5432"
+    networks:
+      - app_net
+
+  monitoring_db:
+    image: postgres:15-alpine
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - monitoring_data:/var/lib/postgresql/data
+    ports:
+      - "1003:5432"
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    driver: overlay
+
+volumes:
+  user_data:
+  maven_repo:
+  device_data:
+  credential_data:
+  monitoring_data:
+  rabbitmq-lib:
+  rabbitmq-log:
