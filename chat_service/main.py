@@ -7,8 +7,9 @@ import google.generativeai as genai
 
 import time
 
-# ... (Imports remain the same) ...
 
+from dotenv import load_dotenv
+load_dotenv()
 app = FastAPI()
 
 # Configure Gemini
@@ -44,7 +45,9 @@ async def get_sessions():
             "user_id": uid,
             "last_message": data['messages'][-1]['text'] if data['messages'] else "",
             "last_active": data['last_active'],
-            "message_count": len(data['messages'])
+            "message_count": len(data['messages']),
+            "admin_requested": data.get('admin_requested', False),
+            "admin_joined": data.get('admin_joined', False)
         })
     # Sort by recent activity
     active_sessions.sort(key=lambda x: x['last_active'], reverse=True)
@@ -55,7 +58,62 @@ async def get_history(user_id: str):
     """Admin: Get chat history for a specific user"""
     if user_id in sessions:
         return sessions[user_id]['messages']
+
     return []
+
+@app.post("/chat/request-admin")
+async def request_admin(payload: dict):
+    user_id = payload.get('user_id')
+    if not user_id:
+        return {"status": "error", "message": "Missing user_id"}
+    
+    if user_id not in sessions:
+        sessions[user_id] = {'messages': [], 'last_active': time.time()}
+    
+    sessions[user_id]['admin_requested'] = True
+    
+    # Notify via WS
+    sys_msg = {
+        'user_id': user_id,
+        'type': 'chat',
+        'text': 'An agent has been requested. Please wait.',
+        'sender': 'system'
+    }
+    sessions[user_id]['messages'].append({
+        "sender": "system",
+        "text": sys_msg['text'],
+        "timestamp": time.time()
+    })
+    publish_to_ws(sys_msg)
+    
+    return {"status": "ok"}
+
+@app.post("/chat/join")
+async def join_chat(payload: dict):
+    user_id = payload.get('user_id') # The user the admin is joining
+    if not user_id:
+        return {"status": "error", "message": "Missing user_id"}
+    
+    if user_id in sessions:
+        sessions[user_id]['admin_joined'] = True
+        sessions[user_id]['admin_requested'] = False # Request fulfilled
+        
+        # Notify via WS
+        sys_msg = {
+            'user_id': user_id,
+            'type': 'chat',
+            'text': 'An administrator has joined the chat.',
+            'sender': 'system'
+        }
+        sessions[user_id]['messages'].append({
+            "sender": "system",
+            "text": sys_msg['text'],
+            "timestamp": time.time()
+        })
+        publish_to_ws(sys_msg)
+        return {"status": "ok"}
+    
+    return {"status": "error", "message": "Session not found"}
 
 @app.post("/chat/message")
 async def send_message(message: dict):
@@ -89,10 +147,13 @@ async def send_message(message: dict):
         'text': text,
         'sender': sender
     }
+    print(f"[CHAT] Publishing echo to WS: {echo_payload}")
     publish_to_ws(echo_payload)
 
-    # 3. AI Logic (Only if sender is 'user')
-    if sender == 'user':
+    # 3. AI Logic (Only if sender is 'user' AND admin has NOT joined)
+    admin_joined = sessions[user_id].get('admin_joined', False)
+    
+    if sender == 'user' and not admin_joined:
         response_text = None
         
         # Rule matching
@@ -105,13 +166,17 @@ async def send_message(message: dict):
         # AI Fallback
         if not response_text and GENAI_API_KEY:
             try:
-                model = genai.GenerativeModel('gemini-pro')
+                model = genai.GenerativeModel('gemini-2.0-flash-lite')
                 response = model.generate_content(text)
                 response_text = response.text
                 print(f"Gemini Response: {response_text}")
             except Exception as e:
                 print(f"Gemini API Error: {e}")
                 response_text = "I'm currently unable to access my AI brain."
+        
+        # Fallback if no response generated (e.g. no API key and no rule match)
+        if not response_text:
+             response_text = "I didn't understand that. Try asking about 'help', 'consumption', or 'devices'."
         
         # If we have an automated response (Rule or AI), send it
         if response_text:
@@ -151,6 +216,7 @@ def publish_to_ws(payload):
         routing_key='', # Fanout ignores routing key
         body=json.dumps(payload)
     )
+    print(f"[CHAT] Published to RabbitMQ: {payload}")
     connection.close()
 
 if __name__ == "__main__":

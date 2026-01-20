@@ -49,9 +49,16 @@ const chatWindow = document.getElementById('chat-window');
 const chatCloseBtn = document.querySelector('.chat-close-btn');
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
+
 const chatSendBtn = document.getElementById('chat-send-btn');
+const requestAdminBtn = document.getElementById('request-admin-btn');
+
+// Admin Chat
+const activeChatsListContainer = document.getElementById('active-chats-list-container');
+let currentChatTargetUserId = null; // Who the admin is currently talking to
 
 let chatWs = null;
+let recentlySentMessages = new Set(); // Track messages we just sent to avoid duplicates
 
 /**
  * ----------------------------------------------------------------
@@ -149,7 +156,7 @@ function attachEventListeners() {
     adminDeviceListBody.addEventListener('click', (e) => {
         const target = e.target.closest('button');
         if (!target) return;
-
+        // ... (existing code)
         const id = target.dataset.id;
         if (target.classList.contains('edit-device-btn')) {
             showEditDeviceModal(id);
@@ -165,6 +172,17 @@ function attachEventListeners() {
             handleViewDeviceDetails(id, ownerId);
         }
     });
+
+    // Admin: Active Chats Delegation
+    if (activeChatsListContainer) {
+        activeChatsListContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (target && target.classList.contains('join-chat-btn')) {
+                const userId = target.dataset.userid;
+                joinChat(userId);
+            }
+        });
+    }
 
     // Client: View Device Details
     clientDeviceListContainer.addEventListener('click', (e) => {
@@ -182,6 +200,25 @@ function attachEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendChatMessage();
     });
+
+    if (requestAdminBtn) {
+        if (userRole === 'ROLE_ADMIN') {
+            requestAdminBtn.style.display = 'none';
+        } else {
+            requestAdminBtn.addEventListener('click', requestAdmin);
+        }
+    }
+
+    // Admin: Active Chats Delegation
+    if (activeChatsListContainer) {
+        activeChatsListContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (target && target.classList.contains('join-chat-btn')) {
+                const userId = target.dataset.userid;
+                joinChat(userId);
+            }
+        });
+    }
 }
 
 /**
@@ -263,7 +300,14 @@ function handleLogout() {
         chatWs.close();
         chatWs = null;
     }
+    if (chatWs) {
+        chatWs.close();
+        chatWs = null;
+    }
     chatWidgetContainer.classList.add('hidden');
+
+    // Stop Admin Polling
+    stopAdminPolling();
 
     showAuthView();
 }
@@ -293,16 +337,17 @@ function showDashboard() {
         userGreeting.textContent = `Welcome, Admin!`;
         adminSection.classList.remove('hidden');
         loadAdminData();
+        // Admins don't use the chat widget - they interact through Active Chats list
     } else { // ROLE_USER
         userGreeting.textContent = `Welcome, User!`;
         clientSection.classList.remove('hidden');
-        clientSection.classList.remove('hidden');
         loadClientData();
-    }
 
-    // Initialize Chat
-    setupChatWebSocket(userId);
-    chatWidgetContainer.classList.remove('hidden');
+        // Initialize Chat for users only
+        // chat WebSocket is now opened only when the chat window is opened
+        // setupChatWebSocket(userId);
+        chatWidgetContainer.classList.remove('hidden');
+    }
 }
 
 /**
@@ -365,9 +410,113 @@ async function loadClientData() {
 /**
  * Loads all data for the admin dashboard.
  */
+let adminPollingInterval = null;
+
 function loadAdminData() {
     loadAllUsers();
     loadAllDevices();
+    loadActiveChats();
+    startAdminPolling();
+}
+
+function startAdminPolling() {
+    if (adminPollingInterval) clearInterval(adminPollingInterval);
+    adminPollingInterval = setInterval(() => {
+        loadActiveChats();
+    }, 3000); // Poll every 3 seconds
+}
+
+function stopAdminPolling() {
+    if (adminPollingInterval) {
+        clearInterval(adminPollingInterval);
+        adminPollingInterval = null;
+    }
+}
+
+async function loadActiveChats() {
+    try {
+        const sessions = await apiFetch('/chat/sessions');
+        activeChatsListContainer.innerHTML = '';
+
+        if (sessions.length === 0) {
+            activeChatsListContainer.innerHTML = '<p>No active chats.</p>';
+            return;
+        }
+
+        sessions.forEach(session => {
+            const card = document.createElement('div');
+            card.className = 'device-card';
+
+            // Visual highlighting based on status
+            if (session.admin_requested && !session.admin_joined) {
+                card.style.border = "3px solid #ff0000";
+                card.style.backgroundColor = "#fff5f5";
+            } else if (session.admin_joined) {
+                card.style.border = "2px solid #00aa00";
+                card.style.backgroundColor = "#f0fff0";
+            }
+
+            card.innerHTML = `
+                <h4>User: ${session.user_id.substring(0, 8)}...</h4>
+                <p><strong>Last Active:</strong> ${new Date(session.last_active * 1000).toLocaleString()}</p>
+                <p><strong>Messages:</strong> ${session.message_count}</p>
+                <p><strong>Admin Requested:</strong> <span style="color: ${session.admin_requested ? 'red' : 'gray'}; font-weight: bold;">${session.admin_requested ? 'YES' : 'No'}</span></p>
+                <p><strong>Admin Joined:</strong> <span style="color: ${session.admin_joined ? 'green' : 'gray'};">${session.admin_joined ? 'YES' : 'No'}</span></p>
+                <button class="join-chat-btn" data-userid="${session.user_id}">${session.admin_joined ? 'View Chat' : 'Join Chat'}</button>
+            `;
+            activeChatsListContainer.appendChild(card);
+        });
+    } catch (error) {
+        console.error('Failed to load active chats:', error.message);
+    }
+}
+
+async function joinChat(targetUserId) {
+    try {
+        await apiFetch('/chat/join', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: targetUserId })
+        });
+
+        currentChatTargetUserId = targetUserId;
+
+        // Open Chat Window
+        // Use the existing chat window but contextualize it
+        setupChatWebSocket(targetUserId); // Connect to THAT user's stream
+        chatWidgetContainer.classList.remove('hidden');
+        chatWindow.classList.remove('hidden');
+
+        // Load history
+        const history = await apiFetch(`/chat/history/${targetUserId}`);
+        chatMessages.innerHTML = ''; // Clear chat
+        history.forEach(msg => {
+            // Admin view: 'user' messages are from customer (other), 'admin' messages are from admin (user)
+            let displayAs = 'other';
+            if (msg.sender === 'admin') {
+                displayAs = 'user';
+            } else if (msg.sender === 'user') {
+                displayAs = 'other';
+            } else if (msg.sender === 'assistant' || msg.sender === 'system') {
+                displayAs = 'other';
+            }
+            addMessageToChat(msg.text, displayAs);
+        });
+
+    } catch (error) {
+        alert('Failed to join chat: ' + error.message);
+    }
+}
+
+async function requestAdmin() {
+    try {
+        await apiFetch('/chat/request-admin', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId })
+        });
+        alert("Administrator requested. Please wait.");
+    } catch (error) {
+        alert("Failed to request admin: " + error.message);
+    }
 }
 
 /**
@@ -854,17 +1003,15 @@ function setupChatWebSocket(userId) {
     // /ws/chat/{userId}
     const wsUrl = `${protocol}//${host}/ws/chat/${userId}`;
 
-    console.log("Connecting to Chat WS:", wsUrl);
+    console.log("[Chat] Connecting to Chat WS:", wsUrl, "for role:", userRole);
     chatWs = new WebSocket(wsUrl);
 
     chatWs.onopen = () => {
-        console.log("Chat WS Connected");
+        console.log("[Chat] WebSocket Connected for user:", userId, "role:", userRole);
     };
 
     chatWs.onmessage = (event) => {
         try {
-            // We might receive "raw string" or JSON
-            // Our chat service sends JSON: { type: 'chat', text: '...', sender: '...' }
             let data = event.data;
             try {
                 data = JSON.parse(data);
@@ -873,7 +1020,49 @@ function setupChatWebSocket(userId) {
             }
 
             if (typeof data === 'object' && data.type === 'chat') {
-                addMessageToChat(data.text, 'other');
+                console.log('[Chat] Received message:', { text: data.text.substring(0, 30), sender: data.sender, user_id: data.user_id }, 'My role:', userRole);
+
+                // Determine if this is our own message echo
+                const isOwnMessage = (
+                    (userRole === 'ROLE_ADMIN' && data.sender === 'admin') ||
+                    (userRole !== 'ROLE_ADMIN' && data.sender === 'user')
+                );
+
+                // Create a unique key for deduplication: "sender:text"
+                const msgKey = `${data.sender}:${data.text}`;
+
+                // Skip if this is an echo of a message WE just sent
+                // We only block echo if WE sent it (isOwnMessage) AND it's in our recent list
+                if (isOwnMessage && recentlySentMessages.has(msgKey)) {
+                    console.log('[Chat] Skipping own message echo:', data.text.substring(0, 20));
+                    return;
+                }
+
+                // Determine how to display based on sender and current user role
+                let displayAs = 'other'; // default
+
+                if (userRole === 'ROLE_ADMIN') {
+                    // Admin view:
+                    // - 'user' messages are from the customer → display as 'other' (left/gray)
+                    // - 'admin' messages are from this admin → display as 'user' (right/blue)
+                    // - 'assistant' or 'system' messages → display as 'other'
+                    if (data.sender === 'admin') {
+                        displayAs = 'user';
+                    } else {
+                        displayAs = 'other';
+                    }
+                } else {
+                    // Regular user view:
+                    // - 'user' messages are from this user → display as 'user' (right/blue)
+                    // - 'admin' or 'assistant' messages are responses → display as 'other' (left/gray)
+                    if (data.sender === 'user') {
+                        displayAs = 'user';
+                    } else {
+                        displayAs = 'other';
+                    }
+                }
+
+                addMessageToChat(data.text, displayAs);
             } else if (typeof data === 'string') {
                 addMessageToChat(data, 'other');
             }
@@ -890,9 +1079,31 @@ function setupChatWebSocket(userId) {
 
 function toggleChatWindow() {
     chatWindow.classList.toggle('hidden');
-    if (!chatWindow.classList.contains('hidden')) {
+    const isVisible = !chatWindow.classList.contains('hidden');
+
+    if (isVisible) {
         chatInput.focus();
         scrollToBottom();
+
+        // Connect if not connected
+        if (!chatWs || chatWs.readyState === WebSocket.CLOSED) {
+            let targetId = userId;
+            if (userRole === 'ROLE_ADMIN') {
+                if (currentChatTargetUserId) {
+                    targetId = currentChatTargetUserId;
+                    setupChatWebSocket(targetId);
+                }
+            } else {
+                setupChatWebSocket(targetId);
+            }
+        }
+    } else {
+        // Closing window - disconnect
+        if (chatWs) {
+            console.log("[Chat] Window closed, closing WebSocket.");
+            chatWs.close();
+            chatWs = null;
+        }
     }
 }
 
@@ -900,9 +1111,28 @@ async function sendChatMessage() {
     const text = chatInput.value.trim();
     if (!text) return;
 
-    // 1. Add to UI immediately
-    addMessageToChat(text, 'user');
+    // Clear input immediately for better UX
     chatInput.value = '';
+
+    // If Admin, ensure we have a target
+    if (userRole === 'ROLE_ADMIN' && !currentChatTargetUserId) {
+        addMessageToChat("Error: No chat target selected.", 'other');
+        return;
+    }
+
+    // Add to UI immediately for the sender
+    addMessageToChat(text, 'user');
+
+    // Track this message to avoid displaying duplicate when echo arrives
+    // Key format: "sender:text" to distinguish between different senders
+    const senderType = (userRole === 'ROLE_ADMIN') ? 'admin' : 'user';
+    const msgKey = `${senderType}:${text}`;
+    recentlySentMessages.add(msgKey);
+    console.log('[Chat] Sent message, tracking:', msgKey.substring(0, 40));
+    // Remove from tracking after 3 seconds (longer than typical echo delay)
+    setTimeout(() => {
+        recentlySentMessages.delete(msgKey);
+    }, 3000);
 
     // 2. Send to Backend via REST
     // We send to /chat endpoint which forwards to Chat Service
@@ -910,9 +1140,9 @@ async function sendChatMessage() {
         await apiFetch('/chat/message', {
             method: 'POST',
             body: JSON.stringify({
-                user_id: userId,
+                user_id: userRole === 'ROLE_ADMIN' && currentChatTargetUserId ? currentChatTargetUserId : userId,
                 text: text,
-                sender: 'user'
+                sender: userRole === 'ROLE_ADMIN' ? 'admin' : 'user'
             })
         });
         // Response will come via WebSocket
