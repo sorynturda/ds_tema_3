@@ -14,7 +14,7 @@ app = FastAPI()
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv('GEMINI_API_KEY')
-PORT = os.getenv('PORT', 9005)
+PORT = int(os.getenv('PORT', 9005))
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
 

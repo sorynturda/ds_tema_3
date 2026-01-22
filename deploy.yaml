@@ -1,0 +1,254 @@
+apiVersion: '2019-12-01'
+location: polandcentral
+name: ds-tema-3-group
+properties:
+  containers:
+    # --- GATEWAY ---
+    - name: rp
+      properties:
+        image: sorynturda/ds_tema_3:ds-rp
+        command: ["nginx", "-g", "daemon off;"]
+        ports:
+          - port: 80
+        resources:
+          requests:
+            cpu: 0.5
+            memoryInGb: 0.5
+
+    # --- SERVICII SPRING BOOT ---
+    - name: auth-service
+      properties:
+        image: sorynturda/ds_tema_3:ds-auth-service
+        environmentVariables:
+          - name: PORT
+            value: "4000"
+          - name: DB_IP
+            value: "localhost"
+          - name: DB_PORT
+            value: "5434"
+          - name: SPRING_RABBITMQ_HOST
+            value: "localhost"
+          - name: USER_SERVICE
+            value: "http://localhost:2000"
+        resources:
+          requests:
+            cpu: 0.3
+            memoryInGb: 0.8
+
+    - name: user-service
+      properties:
+        image: sorynturda/ds_tema_3:ds-user-service
+        environmentVariables:
+          - name: PORT
+            value: "2000"
+          - name: DB_IP
+            value: "localhost"
+          - name: DB_PORT
+            value: "5432"
+          - name: SPRING_RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.3
+            memoryInGb: 0.8
+
+    - name: device-service
+      properties:
+        image: sorynturda/ds_tema_3:ds-device-service
+        environmentVariables:
+          - name: PORT
+            value: "3000"
+          - name: DB_IP
+            value: "localhost"
+          - name: DB_PORT
+            value: "5433"
+          - name: SPRING_RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.3
+            memoryInGb: 0.8
+
+    # --- MONITORING (3 REPLICI) ---
+    - name: monitoring-service-1
+      properties:
+        image: sorynturda/ds_tema_3:ds-monitoring-service
+        environmentVariables:
+          - name: REPLICA_ID
+            value: "0"
+          - name: DB_HOST
+            value: "localhost"
+          - name: DB_PORT
+            value: "5435"
+          - name: PORT
+            value: "8001"
+          - name: RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.4
+
+    # - name: monitoring-service-2
+    #   properties:
+    #     image: sorynturda/ds_tema_3:ds-monitoring-service
+    #     environmentVariables:
+    #       - name: REPLICA_ID
+    #         value: "1"
+    #       - name: DB_HOST
+    #         value: "localhost"
+    #       - name: DB_PORT
+    #         value: "5435"
+    #       - name: PORT
+    #         value: "8002"
+    #       - name: RABBITMQ_HOST
+    #         value: "localhost"
+    #     resources:
+    #       requests:
+    #         cpu: 0.2
+    #         memoryInGb: 0.4
+
+    # - name: monitoring-service-3
+    #   properties:
+    #     image: sorynturda/ds_tema_3:ds-monitoring-service
+    #     environmentVariables:
+    #       - name: REPLICA_ID
+    #         value: "2"
+    #       - name: DB_HOST
+    #         value: "localhost"
+    #       - name: DB_PORT
+    #         value: "5435"
+    #       - name: PORT
+    #         value: "8003"
+    #       - name: RABBITMQ_HOST
+    #         value: "localhost"
+    #     resources:
+    #       requests:
+    #         cpu: 0.2
+    #         memoryInGb: 0.4
+
+    # --- CHAT & WEBSOCKET ---
+    - name: websocket-service
+      properties:
+        image: sorynturda/ds_tema_3:ds-websocket-service
+        environmentVariables:
+          - name: PORT
+            value: 8005
+          - name: RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.4
+
+    - name: chat-service
+      properties:
+        image: sorynturda/ds_tema_3:ds-chat-service
+        environmentVariables:
+          - name: PORT
+            value: 9005
+          - name: RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.4
+
+    - name: load-balancer
+      properties:
+        image: sorynturda/ds_tema_3:ds-load-balancer
+        environmentVariables:
+          - name: MONITORING_REPLICAS
+            value: "3"
+          - name: RABBITMQ_HOST
+            value: "localhost"
+        resources:
+          requests:
+            cpu: 0.1
+            memoryInGb: 0.2
+
+    # --- INFRASTRUCTURĂ ---
+    - name: rabbit
+      properties:
+        image: rabbitmq:management-alpine
+        environmentVariables:
+          - name: RABBITMQ_DEFAULT_USER
+            value: kalo
+          - name: RABBITMQ_DEFAULT_PASS
+            value: kalo
+
+        resources:
+          requests:
+            cpu: 0.3
+            memoryInGb: 0.8
+
+    - name: user-db
+      properties:
+        image: postgres:15-alpine
+        command: ["docker-entrypoint.sh", "postgres", "-p", "5432"]
+        environmentVariables:
+          - name: POSTGRES_DB
+            value: example-db
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.5
+
+    - name: device-db
+      properties:
+        image: postgres:15-alpine
+        command: ["docker-entrypoint.sh", "postgres", "-p", "5433"]
+        environmentVariables:
+          - name: POSTGRES_DB
+            value: example-db
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.5
+
+    - name: credential-db
+      properties:
+        image: postgres:15-alpine
+        command: ["docker-entrypoint.sh", "postgres", "-p", "5434"]
+        environmentVariables:
+          - name: POSTGRES_DB
+            value: example-db
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.5
+
+    - name: monitoring-db
+      properties:
+        image: postgres:15-alpine
+        command: ["docker-entrypoint.sh", "postgres", "-p", "5435"]
+        environmentVariables:
+          - name: POSTGRES_DB
+            value: example-db
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+        resources:
+          requests:
+            cpu: 0.2
+            memoryInGb: 0.5
+
+  osType: Linux
+  ipAddress:
+    type: Public
+    ports:
+      - protocol: tcp
+        port: 80

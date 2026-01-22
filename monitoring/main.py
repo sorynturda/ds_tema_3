@@ -18,7 +18,7 @@ load_dotenv()
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS')
-PORT = os.getenv("PORT", 8005)
+PORT = int(os.getenv("PORT", 8005))
 
 # Incoming Data Config
 # If REPLICA_ID is set, we consume from LB's exchange using a specific routing key.
