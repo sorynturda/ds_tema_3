@@ -5,7 +5,7 @@ echo "Building images..."
 
 REPO=sorynturda/ds_tema_3
 
-docker build -t $REPO:ds-rp ./nginx
+docker build -t $REPO:ds-rp ./nginx/Dockerfile
 docker build -t $REPO:ds-auth-service ./auth
 docker build -t $REPO:ds-user-service ./demo
 docker build -t $REPO:ds-device-service ./demo1
