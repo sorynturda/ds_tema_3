@@ -6,4 +6,6 @@ COPY pom.xml .
 
 RUN mvn dependency:go-offline
 
+EXPOSE 4000
+
 CMD ["mvn", "spring-boot:run"]
