@@ -10,6 +10,6 @@ COPY .env db_module.py main.py ./
 
 EXPOSE 8001
 EXPOSE 8002
-EXOISE 8003
+EXPOSE 8003
 
 CMD [ "python", "main.py" ]
