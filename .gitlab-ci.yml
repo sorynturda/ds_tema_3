@@ -25,14 +25,14 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
     - echo "Compiling the code..."
-    - bash build_images
+    - bash ./build_images
     - echo "Compile complete."
 
 push-job:
   stage: push
   script:
     - echo "Pushing images to registry..."
-    - bash push_images
+    - bash ./push_images
     - echo "Push complete."
     
     
