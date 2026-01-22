@@ -11,7 +11,7 @@ import uuid
 import time
 from dotenv import load_dotenv
 
-from db_module import init_db, write_raw_data, get_daily_consumption, insert_device, insert_mapping, delete_mapping, check_mapping, delete_device
+from db_module import init_db, write_raw_data, get_daily_consumption, insert_device, insert_mapping, delete_mapping, check_mapping, delete_device, get_device_limit
 
 load_dotenv()
 
@@ -112,6 +112,32 @@ def process_measurement(data, ch=None):
         write_raw_data(device_id, user_id, timestamp_str, consumption)
         print(f"[MAIN] Saved to DB: Device {device_id} | Time {timestamp_str}")
         
+        # Check for Overconsumption
+        limit = get_device_limit(device_id)
+        if limit is not None:
+            hourly_total = get_hourly_consumption(device_id, timestamp_str, consumption)
+            if hourly_total > limit:
+                print(f"[MAIN] [ALERT] Overconsumption detected for Device {device_id}. Total: {hourly_total} > Limit: {limit}")
+                alert_msg = {
+                    "timestamp": timestamp_str,
+                    "device_id": device_id,
+                    "user_id": user_id,
+                    "measurement_value": hourly_total,
+                    "limit": limit,
+                    "type": "alert",
+                    "message": f"Device {device_id} exceeded hourly limit! ({hourly_total:.2f} > {limit})"
+                }
+                
+                # Broadcast Alert
+                publish_channel = ch if ch else (channel if 'channel' in globals() else None)
+                if publish_channel:
+                     publish_channel.basic_publish(
+                        exchange='broadcast_exchange',
+                        routing_key='',
+                        body=json.dumps(alert_msg)
+                     )
+                     print(f"[MAIN] Published ALERT to broadcast_exchange")
+        
         message = json.dumps(data)
         
         # Use provided channel or fallback to global (unsafe)
@@ -151,9 +177,10 @@ def device_callback(ch, method, properties, body):
         
         if routing_key == DEVICE_ROUTING_KEY_CREATED:
             device_id = data.get('id')
+            consumption_limit = data.get('consumption') # Extract consumption limit
             if device_id:
-                insert_device(device_id)
-                print(f"[MAIN] Device {device_id} created/updated.")
+                insert_device(device_id, consumption_limit)
+                print(f"[MAIN] Device {device_id} created/updated with limit {consumption_limit}.")
 
         elif routing_key == DEVICE_ROUTING_KEY_ASSIGNED:
             device_id = data.get('deviceId')

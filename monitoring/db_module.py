@@ -42,7 +42,8 @@ def init_db():
 
         create_devices_table = """
         CREATE TABLE IF NOT EXISTS devices (
-            id UUID PRIMARY KEY
+            id UUID PRIMARY KEY,
+            max_consumption NUMERIC(10, 5)
         );
         """
         cursor.execute(create_devices_table)
@@ -89,7 +90,7 @@ def write_raw_data(device_id, user_id, timestamp_str, consumption):
         if conn:
             conn.close()
 
-def insert_device(device_id):
+def insert_device(device_id, max_consumption=None):
     """Inserts or updates a device record."""
     conn = None
     try:
@@ -97,14 +98,15 @@ def insert_device(device_id):
         cursor = conn.cursor()
 
         insert_query = """
-        INSERT INTO devices (id)
-        VALUES (%s)
-        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO devices (id, max_consumption)
+        VALUES (%s, %s)
+        ON CONFLICT (id) DO UPDATE
+        SET max_consumption = EXCLUDED.max_consumption;
         """
 
-        cursor.execute(insert_query, (device_id,))
+        cursor.execute(insert_query, (device_id, max_consumption))
         conn.commit()
-        print(f"[DB_Module] Device {device_id} saved.")
+        print(f"[DB_Module] Device {device_id} saved with limit {max_consumption}.")
 
     except Exception as e:
         print(f"[DB_Module] ERROR inserting device: {e}")
@@ -234,6 +236,29 @@ def get_daily_consumption(device_id, date_str):
     except Exception as e:
         print(f"[DB_Module] ERROR fetching daily consumption: {e}")
         return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_device_limit(device_id):
+    """Retrieves the max_consumption for a device."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT max_consumption FROM devices WHERE id = %s;"
+        cursor.execute(query, (device_id,))
+        result = cursor.fetchone()
+        
+        if result and result[0] is not None:
+             return float(result[0])
+        return None
+
+    except Exception as e:
+        print(f"[DB_Module] ERROR fetching device limit: {e}")
+        return None
     finally:
         if conn:
             conn.close()

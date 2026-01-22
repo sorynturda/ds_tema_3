@@ -1063,6 +1063,9 @@ function setupChatWebSocket(userId) {
                 }
 
                 addMessageToChat(data.text, displayAs);
+            } else if (typeof data === 'object' && data.type === 'alert') {
+                console.log("[Alert] Received alert:", data.message);
+                alert(data.message); // Simple browser alert as requested
             } else if (typeof data === 'string') {
                 addMessageToChat(data, 'other');
             }

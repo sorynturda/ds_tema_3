@@ -108,8 +108,8 @@ def rabbitmq_consumer(loop):
                         )
                     
                     if 'user_id' in data:
-                        if data.get('type') == 'chat':
-                            print(f"[WS] Broadcasting chat message to user {data['user_id']}", flush=True)
+                        if data.get('type') == 'chat' or data.get('type') == 'alert':
+                            print(f"[WS] Broadcasting {data.get('type')} to user {data['user_id']}", flush=True)
                             asyncio.run_coroutine_threadsafe(
                                  manager.send_personal_message(message, data['user_id']), 
                                  loop
