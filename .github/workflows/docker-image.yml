@@ -1,0 +1,73 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+# env:
+#   RABBITMQ_HOST: ${{ vars.RABBITMQ_HOST }}
+#   RABBITMQ_USER: ${{ vars.RABBITMQ_USER }}
+#   RABBITMQ_PASS: ${{ vars.RABBITMQ_PASS }}
+#   GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: deploy
+
+    env:
+      RABBITMQ_HOST: ${{ vars.RABBITMQ_HOST }}
+      RABBITMQ_PASS: ${{ vars.RABBITMQ_PASS }}
+      RABBITMQ_USER: ${{ vars.RABBITMQ_USER }}
+      GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create env files
+        run: |
+          touch ./chat_service/.env ./data_simulator/.env ./websocket_service/.env ./monitoring/.env
+          echo "RABBITMQ_HOST=${RABBITMQ_HOST}" >> ./chat_service/.env
+          echo "RABBITMQ_PASS=${RABBITMQ_PASS}" >> ./chat_service/.env
+          echo "RABBITMQ_USER=${RABBITMQ_USER}" >> ./chat_service/.env
+          echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> ./chat_service/.env
+          
+          cat ./chat_service/.env
+          echo RABBITMQ_HOST=${RABBITMQ_HOST} >> ./data_simulator/.env
+          echo RABBITMQ_PASS=${RABBITMQ_PASS} >> ./data_simulator/.env
+          echo RABBITMQ_USER=${RABBITMQ_USER} >> ./data_simulator/.env
+          cat ./data_simulator/.env
+          
+          echo RABBITMQ_HOST=${RABBITMQ_HOST} >> ./websocket_service/.env
+          echo RABBITMQ_PASS=${RABBITMQ_PASS} >> ./websocket_service/.env
+          echo RABBITMQ_USER=${RABBITMQ_USER} >> ./websocket_service/.env
+          cat ./websocket_service/.env
+  
+          echo RABBITMQ_HOST=${RABBITMQ_HOST} >> ./monitoring/.env
+          echo RABBITMQ_PASS=${RABBITMQ_PASS} >> ./monitoring/.env
+          echo RABBITMQ_USER=${RABBITMQ_USER} >> ./monitoring/.env
+          cat ./monitoring/.env
+
+      - name: Build the Docker images
+        run: bash ./build_images.sh
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Push to docker registry
+        run: bash ./push_images.sh
+        
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: sorynturda/ds_tema_3
