@@ -106,7 +106,7 @@ def process_measurement(data, ch=None):
         # Local Validation
         is_valid = check_mapping(device_id, user_id)
         if not is_valid:
-            print(f"[MAIN] Validation FAILED for Device {device_id} and User {user_id}. Device not mapped to user. Dropping data.")
+            print(f"[MAIN] [VALIDATION ERROR] Device {device_id} is NOT mapped to User {user_id}. Data dropped. Check 'device_mappings' table.")
             return
 
         write_raw_data(device_id, user_id, timestamp_str, consumption)
@@ -125,7 +125,7 @@ def process_measurement(data, ch=None):
              )
              print(f"[MAIN] Published update to broadcast_exchange")
         else:
-             print("[MAIN] Warning: Channel not available for broadcast")
+             print("[MAIN] [WARNING] broadcast_exchange channel not available. Real-time update skipped.")
 
     except Exception as e:
         print(f"[MAIN] ERROR processing/writing data: {e} | Raw Data: {data}")

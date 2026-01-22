@@ -145,7 +145,7 @@ class SimulatorApp:
         while self.is_running:
             try:
                 measurement_value = self.generate_measurement(simulated_time)
-                timestamp_str = simulated_time.strftime('%Y-%m-%d %H:%M:%S')
+                timestamp_str = simulated_time.isoformat()
 
                 message_body = {
                     "timestamp": timestamp_str,

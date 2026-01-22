@@ -1199,6 +1199,10 @@ function setupWebSocket(userId, deviceId) {
 
                     if (selectedDate === today) {
                         const timestamp = new Date(data.timestamp);
+                        // The chart expects 0-23 hours. 
+                        // If the backend timestamp is UTC, the browser converts it to local here (new Date).
+                        // However, we should ensure consistent day/hour extraction.
+                        // Assuming the user wants to see data in their local time:
                         const hour = timestamp.getHours();
 
                         if (hour >= 0 && hour < 24) {
@@ -1206,7 +1210,7 @@ function setupWebSocket(userId, deviceId) {
                             // Note: The chart data is cumulative for the hour in the backend (SUM),
                             // and the WS sends the increment (measurement_value).
                             // So we add it to the existing value in the chart.
-                            const currentVal = currentChart.data.datasets[0].data[hour] || 0;
+                            const currentVal = eval(currentChart.data.datasets[0].data[hour]) || 0; // ensure number
                             currentChart.data.datasets[0].data[hour] = currentVal + data.measurement_value;
                             currentChart.update();
                         }
