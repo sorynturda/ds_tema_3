@@ -178,6 +178,7 @@ services:
       restart_policy:
         condition: on-failure
     environment:
+      POSTGRES_DB: example-db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -196,6 +197,7 @@ services:
       restart_policy:
         condition: on-failure
     environment:
+      POSTGRES_DB: example-db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -214,6 +216,7 @@ services:
       restart_policy:
         condition: on-failure
     environment:
+      POSTGRES_DB: example-db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -232,6 +235,7 @@ services:
       restart_policy:
         condition: on-failure
     environment:
+      POSTGRES_DB: example-db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
