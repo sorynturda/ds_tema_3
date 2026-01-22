@@ -24,18 +24,15 @@ stages:          # List of stages for jobs, and their order of execution
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
-    - |
-      ls -lR 
-      pwd
     - echo "Compiling the code..."
-    - bash ./build_images
+    - bash ./build_images.sh
     - echo "Compile complete."
 
 push-job:
   stage: push
   script:
     - echo "Pushing images to registry..."
-    - bash ./push_images
+    - bash ./push_images.sh
     - echo "Push complete."
     
     
