@@ -2,13 +2,11 @@
 set -e
 REPO=sorynturda/ds_tema_3
 
-docker push sorynturda/ds_tema_3/ds-rp:latest
-# docker push sorynturda/ds_tema_3/ds-auth-service:latest
-# docker push sorynturda/ds_tema_3/ds-user-service:latest
-# docker push sorynturda/ds_tema_3/ds-device-service:latest
-# docker push sorynturda/ds_tema_3/ds-monitoring-service:latest
-
-# docker push sorynturda/ds_tema_3/ds-load-balancer:latest
-# docker push sorynturda/ds_tema_3/ds-websocket-service:latest
-# docker push sorynturda/ds_tema_3/ds-chat-service:latest
-
+docker push $REPO:ds-rp
+# docker push $REPO:ds-auth-service
+# docker push $REPO:ds-user-service
+# docker push $REPO:ds-device-service
+# docker push $REPO:ds-monitoring-service
+# docker push $REPO:ds-load-balancer
+# docker push $REPO:ds-websocket-service
+# docker push $REPO:ds-chat-service

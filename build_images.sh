@@ -1,15 +1,17 @@
 #!/bin/bash
 set -e
+
 echo "Building images..."
 
-docker build -t sorynturda/ds_tema_3/ds-rp:latest ./nginx
-# docker build -t sorynturda/ds_tema_3/ds-auth-service:latest ./auth
-# docker build -t sorynturda/ds_tema_3/ds-user-service:latest ./demo
-# docker build -t sorynturda/ds_tema_3/ds-device-service:latest ./demo1
-# docker build -t sorynturda/ds_tema_3/ds-monitoring-service:latest ./monitoring
+REPO=sorynturda/ds_tema_3
 
-# docker build -t sorynturda/ds_tema_3/ds-load-balancer:latest ./load_balancer
-# docker build -t sorynturda/ds_tema_3/ds-websocket-service:latest ./websocket_service
-# docker build -t sorynturda/ds_tema_3/ds-chat-service:latest ./chat_service
+docker build -t $REPO:ds-rp ./nginx
+# docker build -t $REPO:ds-auth-service ./auth
+# docker build -t $REPO:ds-user-service ./demo
+# docker build -t $REPO:ds-device-service ./demo1
+# docker build -t $REPO:ds-monitoring-service ./monitoring
+# docker build -t $REPO:ds-load-balancer ./load_balancer
+# docker build -t $REPO:ds-websocket-service ./websocket_service
+# docker build -t $REPO:ds-chat-service ./chat_service
 
-# echo "Images built successfully."
+echo "Images built successfully."
