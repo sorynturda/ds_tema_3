@@ -14,6 +14,7 @@ app = FastAPI()
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv('GEMINI_API_KEY')
+PORT = os.getenv('PORT', 9005)
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
 
@@ -221,4 +222,4 @@ def publish_to_ws(payload):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

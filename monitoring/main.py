@@ -18,6 +18,7 @@ load_dotenv()
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS')
+PORT = os.getenv("PORT", 8005)
 
 # Incoming Data Config
 # If REPLICA_ID is set, we consume from LB's exchange using a specific routing key.
@@ -279,7 +280,7 @@ async def startup_event():
 def main():
     init_db()
     # RPC Client initialization removed
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
 
 if __name__ == '__main__':
     main()
